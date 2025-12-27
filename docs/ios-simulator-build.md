@@ -21,7 +21,7 @@
 ### 2. Xcode でビルド
 
 ```bash
-cd "/Users/iwasakishungo/Git/github.com/iwasaki1112/3d-game/My project/Builds/iOS-Simulator"
+cd "/Users/iwasakishungo/Git/github.com/iwasaki1112/3d-game/SupportRateAgeAge/Builds/iOS-Simulator"
 
 xcodebuild -project Unity-iPhone.xcodeproj \
     -scheme Unity-iPhone \
