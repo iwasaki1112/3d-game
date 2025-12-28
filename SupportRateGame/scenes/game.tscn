@@ -1,11 +1,10 @@
-[gd_scene load_steps=13 format=3 uid="uid://cgame"]
+[gd_scene load_steps=9 format=3 uid="uid://cgame"]
 
 [ext_resource type="PackedScene" uid="uid://cplayer" path="res://scenes/player.tscn" id="1_player"]
-[ext_resource type="PackedScene" uid="uid://ccoin" path="res://scenes/coin.tscn" id="2_coin"]
-[ext_resource type="Script" path="res://scripts/coin_spawner.gd" id="3_spawner"]
 [ext_resource type="Script" path="res://scripts/game_ui.gd" id="4_ui"]
 [ext_resource type="Script" path="res://scripts/game_scene.gd" id="5_game"]
-[ext_resource type="PackedScene" uid="uid://cjoystick" path="res://scenes/virtual_joystick.tscn" id="6_joystick"]
+[ext_resource type="Mesh" uid="uid://svffoox0m1yc" path="res://assets/maps/10450_Rectangular_Grass_Patch_v1_iterations-2.obj" id="7_grass_mesh"]
+[ext_resource type="Texture2D" path="res://assets/maps/10450_Rectangular_Grass_Patch_v1_Diffuse.jpg" id="8_grass_texture"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sky"]
 sky_top_color = Color(0.4, 0.6, 0.9, 1)
@@ -24,13 +23,7 @@ ambient_light_color = Color(0.7, 0.7, 0.8, 1)
 ambient_light_energy = 0.5
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ground"]
-albedo_color = Color(0.3, 0.5, 0.3, 1)
-
-[sub_resource type="BoxMesh" id="BoxMesh_ground"]
-size = Vector3(50, 1, 50)
-
-[sub_resource type="BoxShape3D" id="BoxShape3D_ground"]
-size = Vector3(50, 1, 50)
+albedo_texture = ExtResource("8_grass_texture")
 
 [node name="Game" type="Node3D"]
 script = ExtResource("5_game")
@@ -43,22 +36,13 @@ transform = Transform3D(0.866, -0.25, 0.433, 0, 0.866, 0.5, -0.5, -0.433, 0.75, 
 light_energy = 1.2
 shadow_enabled = true
 
-[node name="Ground" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Ground"]
-shape = SubResource("BoxShape3D_ground")
-
-[node name="MeshInstance3D" type="MeshInstance3D" parent="Ground"]
-mesh = SubResource("BoxMesh_ground")
+[node name="GrassMesh" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.5, 0, 0, 0, 0, 0.5, 0, 0.5, 0, 0, -2.868, 0)
+mesh = ExtResource("7_grass_mesh")
 surface_material_override/0 = SubResource("StandardMaterial3D_ground")
 
 [node name="Player" parent="." instance=ExtResource("1_player")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
-
-[node name="CoinSpawner" type="Node3D" parent="."]
-script = ExtResource("3_spawner")
-coin_scene = ExtResource("2_coin")
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 0)
 
 [node name="GameUI" type="CanvasLayer" parent="."]
 script = ExtResource("4_ui")
@@ -66,7 +50,7 @@ script = ExtResource("4_ui")
 [node name="MarginContainer" type="MarginContainer" parent="GameUI"]
 anchors_preset = 10
 anchor_right = 1.0
-offset_bottom = 120.0
+offset_bottom = 140.0
 grow_horizontal = 2
 theme_override_constants/margin_left = 20
 theme_override_constants/margin_top = 20
@@ -76,20 +60,27 @@ theme_override_constants/margin_bottom = 20
 [node name="VBoxContainer" type="VBoxContainer" parent="GameUI/MarginContainer"]
 layout_mode = 2
 
-[node name="ScoreLabel" type="Label" parent="GameUI/MarginContainer/VBoxContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 24
-text = "支持率ポイント: 0"
-
 [node name="TimerLabel" type="Label" parent="GameUI/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 24
-text = "残り時間: 01:00"
+theme_override_font_sizes/font_size = 28
+text = "1:45"
+horizontal_alignment = 1
 
-[node name="SupportRateLabel" type="Label" parent="GameUI/MarginContainer/VBoxContainer"]
+[node name="RoundLabel" type="Label" parent="GameUI/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 24
-text = "支持率: 30.0%"
+theme_override_font_sizes/font_size = 18
+text = "CT 0 - 0 T | Round 1"
+horizontal_alignment = 1
+
+[node name="MoneyLabel" type="Label" parent="GameUI/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "$800"
+
+[node name="HealthLabel" type="Label" parent="GameUI/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "HP: 100"
 
 [node name="GameOverPanel" type="Panel" parent="GameUI"]
 visible = false
@@ -118,19 +109,13 @@ alignment = 1
 [node name="GameOverTitle" type="Label" parent="GameUI/GameOverPanel/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 32
-text = "ゲーム終了"
+text = "Game Over"
 horizontal_alignment = 1
 
 [node name="FinalScoreLabel" type="Label" parent="GameUI/GameOverPanel/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
-text = "最終スコア: 0"
-horizontal_alignment = 1
-
-[node name="FinalMessageLabel" type="Label" parent="GameUI/GameOverPanel/VBoxContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 16
-text = "結果メッセージ"
+text = "CT Wins!"
 horizontal_alignment = 1
 
 [node name="RestartButton" type="Button" parent="GameUI/GameOverPanel/VBoxContainer"]
@@ -138,15 +123,4 @@ custom_minimum_size = Vector2(150, 50)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_font_sizes/font_size = 20
-text = "もう一度"
-
-[node name="VirtualJoystick" parent="GameUI" instance=ExtResource("6_joystick")]
-layout_mode = 1
-anchors_preset = 2
-anchor_top = 1.0
-anchor_bottom = 1.0
-offset_left = 180.0
-offset_top = -250.0
-offset_right = 340.0
-offset_bottom = -90.0
-grow_vertical = 0
+text = "Restart"

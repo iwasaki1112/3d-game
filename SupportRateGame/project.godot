@@ -10,8 +10,8 @@ config_version=5
 
 [application]
 
-config/name="支持率アップゲーム"
-config/description="60秒で支持率を上げろ！コインを集めて支持率アップ！"
+config/name="Tactical Strike"
+config/description="CS1.6 meets Door Kickers 2 - トップダウンタクティカルシューター"
 run/main_scene="res://scenes/title.tscn"
 config/features=PackedStringArray("4.5", "Mobile")
 config/icon="res://icon.svg"
