@@ -4,7 +4,9 @@ extends CharacterBody3D
 ## モバイル対応（タッチ操作 + スワイプカメラ）
 
 @export_group("移動設定")
-@export var move_speed: float = 5.0
+@export var walk_speed: float = 3.0
+@export var run_speed: float = 7.0
+@export var run_threshold: float = 0.7  # ジョイスティックをこれ以上傾けたら走る
 @export var rotation_speed: float = 10.0
 
 @export_group("カメラ設定")
@@ -12,6 +14,7 @@ extends CharacterBody3D
 @export var camera_height: float = 3.0
 @export var camera_smooth_speed: float = 5.0
 @export var camera_sensitivity: float = 0.002
+@export var touch_sensitivity: float = 0.15  # タッチ操作用の感度（高め）
 @export var min_vertical_angle: float = -20.0
 @export var max_vertical_angle: float = 60.0
 
@@ -30,8 +33,11 @@ var camera_touch_id: int = -1
 
 # アニメーション
 var anim_player: AnimationPlayer = null
-var is_walking: bool = false
+var current_move_state: int = 0  # 0: idle, 1: walk, 2: run
 const ANIM_BLEND_TIME: float = 0.3  # アニメーションブレンド時間
+
+# 現在の移動スピード（ジョイスティック距離で変化）
+var current_speed: float = 0.0
 
 @onready var camera: Camera3D = $Camera3D
 
@@ -47,7 +53,7 @@ func _ready() -> void:
 		anim_player = model.get_node_or_null("AnimationPlayer")
 		if anim_player:
 			# アニメーションを読み込んで追加
-			_load_walking_animation()
+			_load_animations()
 			print("AnimationPlayer found, animations: ", anim_player.get_animation_list())
 			# 初期状態でIdleを再生
 			if anim_player.has_animation("idle"):
@@ -71,9 +77,23 @@ func _handle_input() -> void:
 	input_dir.x = Input.get_axis("move_left", "move_right")
 	input_dir.y = Input.get_axis("move_forward", "move_backward")
 
+	var input_strength := input_dir.length()
+
 	# モバイルジョイスティック入力がある場合はそちらを優先
 	if joystick_input.length() > 0.1:
 		input_dir = joystick_input
+		input_strength = joystick_input.length()
+
+	# ジョイスティックの傾き具合でスピードを決定
+	if input_strength > run_threshold:
+		# 走る
+		current_speed = run_speed
+	elif input_strength > 0.1:
+		# 歩く（傾き具合に応じて速度を補間）
+		var walk_factor := input_strength / run_threshold
+		current_speed = walk_speed * walk_factor
+	else:
+		current_speed = 0.0
 
 	# カメラの向きを基準にした移動方向を計算
 	var forward := -camera.global_transform.basis.z
@@ -84,25 +104,21 @@ func _handle_input() -> void:
 	right = right.normalized()
 
 	var move_direction := (forward * -input_dir.y + right * input_dir.x).normalized()
-	velocity.x = move_direction.x * move_speed
-	velocity.z = move_direction.z * move_speed
+	velocity.x = move_direction.x * current_speed
+	velocity.z = move_direction.z * current_speed
 
 
 func _handle_camera_input() -> void:
-	# マウス入力（エディタ/PC用）
-	if Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
-		var mouse_motion := Input.get_last_mouse_velocity() * camera_sensitivity * 0.1
-		camera_yaw -= mouse_motion.x
-		camera_pitch -= mouse_motion.y
-		camera_pitch = clampf(camera_pitch, min_vertical_angle, max_vertical_angle)
+	# この関数は使用しない（_inputで処理）
+	pass
 
 
 func _input(event: InputEvent) -> void:
-	# マウスモーション
-	if event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT):
-		camera_yaw -= event.relative.x * camera_sensitivity
-		camera_pitch -= event.relative.y * camera_sensitivity
-		camera_pitch = clampf(camera_pitch, min_vertical_angle, max_vertical_angle)
+	# マウスモーション（右クリックまたは左クリックでカメラ回転）
+	if event is InputEventMouseMotion:
+		if Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT) or Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+			camera_yaw -= event.relative.x * camera_sensitivity
+			# PC版もY軸は変更しない（モバイルと統一）
 
 	# タッチ入力（モバイル用）- 画面右半分でのスワイプ
 	if event is InputEventScreenTouch:
@@ -121,9 +137,8 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventScreenDrag:
 		if is_camera_dragging and event.index == camera_touch_id:
 			var touch_delta: Vector2 = event.position - last_touch_position
-			camera_yaw -= touch_delta.x * camera_sensitivity
-			camera_pitch -= touch_delta.y * camera_sensitivity
-			camera_pitch = clampf(camera_pitch, min_vertical_angle, max_vertical_angle)
+			camera_yaw -= touch_delta.x * touch_sensitivity
+			# Y軸（高さ）は変更しない - 水平回転のみ
 			last_touch_position = event.position
 
 
@@ -144,21 +159,26 @@ func _handle_movement(delta: float) -> void:
 		rotation.y = lerp_angle(rotation.y, target_rotation, rotation_speed * delta)
 
 
-func _handle_camera_follow(delta: float) -> void:
+func _handle_camera_follow(_delta: float) -> void:
 	if camera == null:
 		return
 
-	# カメラの回転をクォータニオンに変換
-	var camera_rotation := Quaternion.from_euler(Vector3(deg_to_rad(camera_pitch), deg_to_rad(camera_yaw), 0))
+	# カメラの回転角度からオフセットを計算
+	var yaw_rad := deg_to_rad(camera_yaw)
+	var pitch_rad := deg_to_rad(camera_pitch)
 
-	# カメラのオフセット位置を計算
-	var offset := camera_rotation * Vector3(0, 0, camera_distance)
-	offset.y += camera_height
+	# 球面座標からカメラ位置を計算（プレイヤーの周りを回る）
+	var offset := Vector3(
+		sin(yaw_rad) * cos(pitch_rad) * camera_distance,
+		sin(pitch_rad) * camera_distance + camera_height,
+		cos(yaw_rad) * cos(pitch_rad) * camera_distance
+	)
 
-	# TPSカメラの位置を計算
-	var target_position := global_position + offset
-	camera.global_position = camera.global_position.lerp(target_position, camera_smooth_speed * delta)
-	camera.look_at(global_position + Vector3.UP * 1.5)
+	# カメラ位置を直接設定（揺れない）
+	camera.global_position = global_position + offset
+
+	# プレイヤーの少し上を見る
+	camera.look_at(global_position + Vector3.UP * 1.0)
 
 
 ## モバイルジョイスティックからの入力を受け取る
@@ -173,42 +193,35 @@ func on_coin_collected() -> void:
 
 
 ## アニメーションを読み込む
-func _load_walking_animation() -> void:
+func _load_animations() -> void:
 	var lib = anim_player.get_animation_library("")
 	if lib == null:
 		return
 
-	# Walkingアニメーション
-	var walking_scene = load("res://assets/characters/animations/walking.fbx")
-	if walking_scene:
-		var walking_instance = walking_scene.instantiate()
-		var walking_anim_player = walking_instance.get_node_or_null("AnimationPlayer")
-		if walking_anim_player:
-			for anim_name in walking_anim_player.get_animation_list():
-				var anim = walking_anim_player.get_animation(anim_name)
-				if anim:
-					var anim_copy = anim.duplicate()
-					anim_copy.loop_mode = Animation.LOOP_LINEAR  # ループ設定
-					lib.add_animation("walking", anim_copy)
-					print("Walking animation added!")
-					break
-		walking_instance.queue_free()
+	# 各アニメーションをロード
+	_load_animation_from_fbx(lib, "res://assets/characters/animations/idle.fbx", "idle")
+	_load_animation_from_fbx(lib, "res://assets/characters/animations/walking.fbx", "walking")
+	_load_animation_from_fbx(lib, "res://assets/characters/animations/running.fbx", "running")
 
-	# Idleアニメーション
-	var idle_scene = load("res://assets/characters/animations/idle.fbx")
-	if idle_scene:
-		var idle_instance = idle_scene.instantiate()
-		var idle_anim_player = idle_instance.get_node_or_null("AnimationPlayer")
-		if idle_anim_player:
-			for anim_name in idle_anim_player.get_animation_list():
-				var anim = idle_anim_player.get_animation(anim_name)
-				if anim:
-					var anim_copy = anim.duplicate()
-					anim_copy.loop_mode = Animation.LOOP_LINEAR  # ループ設定
-					lib.add_animation("idle", anim_copy)
-					print("Idle animation added!")
-					break
-		idle_instance.queue_free()
+
+## FBXからアニメーションを読み込んでライブラリに追加
+func _load_animation_from_fbx(lib: AnimationLibrary, path: String, anim_name: String) -> void:
+	var scene = load(path)
+	if scene == null:
+		return
+
+	var instance = scene.instantiate()
+	var scene_anim_player = instance.get_node_or_null("AnimationPlayer")
+	if scene_anim_player:
+		for name in scene_anim_player.get_animation_list():
+			var anim = scene_anim_player.get_animation(name)
+			if anim:
+				var anim_copy = anim.duplicate()
+				anim_copy.loop_mode = Animation.LOOP_LINEAR  # ループ設定
+				lib.add_animation(anim_name, anim_copy)
+				print(anim_name + " animation added!")
+				break
+	instance.queue_free()
 
 
 ## アニメーションを更新
@@ -216,14 +229,28 @@ func _update_animation() -> void:
 	if anim_player == null:
 		return
 
-	var horizontal_velocity := Vector3(velocity.x, 0, velocity.z)
-	var should_walk := horizontal_velocity.length() > 0.1
+	# 現在の速度から状態を判定
+	var new_state: int = 0  # idle
+	if current_speed >= run_speed * 0.9:
+		new_state = 2  # run
+	elif current_speed > 0.1:
+		new_state = 1  # walk
 
-	if should_walk and not is_walking:
-		is_walking = true
-		if anim_player.has_animation("walking"):
-			anim_player.play("walking", ANIM_BLEND_TIME)
-	elif not should_walk and is_walking:
-		is_walking = false
-		if anim_player.has_animation("idle"):
-			anim_player.play("idle", ANIM_BLEND_TIME)
+	# 状態が変わったらアニメーションを切り替え
+	if new_state != current_move_state:
+		current_move_state = new_state
+		anim_player.speed_scale = 1.0  # 速度をリセット
+		match current_move_state:
+			0:  # idle
+				if anim_player.has_animation("idle"):
+					anim_player.play("idle", ANIM_BLEND_TIME)
+			1:  # walk
+				if anim_player.has_animation("walking"):
+					anim_player.play("walking", ANIM_BLEND_TIME)
+			2:  # run
+				if anim_player.has_animation("running"):
+					anim_player.play("running", ANIM_BLEND_TIME)
+				elif anim_player.has_animation("walking"):
+					# runningが無ければwalkingを高速再生
+					anim_player.play("walking", ANIM_BLEND_TIME)
+					anim_player.speed_scale = 1.5
