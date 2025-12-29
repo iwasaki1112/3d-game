@@ -27,11 +27,11 @@ const ANIMATION_FILES := {
 	"running": "res://assets/characters/animations/running.fbx"
 }
 
-## キャラクター別のY位置オフセット（足の位置を揃えるため）
-## GSG9の足はLEETより約0.00069高いので、下げる必要がある
+## キャラクター別のY位置オフセット（足の位置を地面に合わせるため）
+## スケール2の場合の値。視覚的な位置調整。
 const CHARACTER_Y_OFFSET := {
-	"leet": 0.0,
-	"gsg9": -0.00069,  # LEETに合わせて下げる
+	"leet": -0.75,  # 視覚的に調整
+	"gsg9": -0.72,  # 視覚的に調整
 }
 
 
