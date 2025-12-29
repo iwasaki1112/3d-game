@@ -13,7 +13,7 @@ extends CanvasLayer
 # Shopping UI
 @onready var shopping_panel: Panel = $ShoppingPanel
 @onready var none_button: Button = $ShoppingPanel/VBoxContainer/NoneButton
-@onready var rifle_button: Button = $ShoppingPanel/VBoxContainer/RifleButton
+@onready var ak47_button: Button = $ShoppingPanel/VBoxContainer/AK47Button
 @onready var pistol_button: Button = $ShoppingPanel/VBoxContainer/PistolButton
 
 # デバッグ用
@@ -42,8 +42,11 @@ func _ready() -> void:
 
 	# Shopping buttons
 	none_button.pressed.connect(_on_none_button_pressed)
-	rifle_button.pressed.connect(_on_rifle_button_pressed)
+	ak47_button.pressed.connect(_on_ak47_button_pressed)
 	pistol_button.pressed.connect(_on_pistol_button_pressed)
+	
+	# ボタンテキストに価格を表示
+	_update_weapon_button_texts()
 
 	# GameManagerのシグナルに接続
 	GameManager.money_changed.connect(_on_money_changed)
@@ -164,18 +167,34 @@ func _update_debug_info() -> void:
 
 ## Shopping button handlers
 func _on_none_button_pressed() -> void:
-	_set_player_weapon(CharacterSetup.WeaponType.NONE)
+	_buy_weapon(CharacterSetup.WeaponId.NONE)
 
 
-func _on_rifle_button_pressed() -> void:
-	_set_player_weapon(CharacterSetup.WeaponType.RIFLE)
+func _on_ak47_button_pressed() -> void:
+	_buy_weapon(CharacterSetup.WeaponId.AK47)
 
 
 func _on_pistol_button_pressed() -> void:
-	_set_player_weapon(CharacterSetup.WeaponType.PISTOL)
+	_buy_weapon(CharacterSetup.WeaponId.USP)
 
 
-func _set_player_weapon(weapon_type: int) -> void:
-	if GameManager.player:
-		GameManager.player.set_weapon_type(weapon_type)
-		print("[GameUI] Set player weapon to: %s" % CharacterSetup.WEAPON_TYPE_NAMES.get(weapon_type, "unknown"))
+func _buy_weapon(weapon_id: int) -> void:
+	var weapon_data = CharacterSetup.get_weapon_data(weapon_id)
+	var price = weapon_data.price
+	
+	# 購入処理
+	if GameManager.buy_weapon(price):
+		if GameManager.player:
+			GameManager.player.set_weapon(weapon_id)
+			print("[GameUI] Bought weapon: %s for $%d" % [weapon_data.name, price])
+	else:
+		print("[GameUI] Cannot buy weapon: %s (need $%d, have $%d)" % [weapon_data.name, price, GameManager.player_money])
+
+
+func _update_weapon_button_texts() -> void:
+	var ak47_data = CharacterSetup.get_weapon_data(CharacterSetup.WeaponId.AK47)
+	var usp_data = CharacterSetup.get_weapon_data(CharacterSetup.WeaponId.USP)
+	
+	none_button.text = "None"
+	ak47_button.text = "AK-47 ($%d)" % ak47_data.price
+	pistol_button.text = "USP ($%d)" % usp_data.price

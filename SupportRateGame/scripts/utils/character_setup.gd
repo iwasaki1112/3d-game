@@ -20,8 +20,49 @@ const TEXTURE_MAP := {
 	}
 }
 
-## 武器タイプ
+## 武器タイプ（アニメーションカテゴリ）
 enum WeaponType { NONE, RIFLE, PISTOL }
+
+## 武器ID
+enum WeaponId { NONE, AK47, USP }
+
+## 武器データ定義
+const WEAPON_DATA := {
+	WeaponId.NONE: {
+		"name": "None",
+		"type": WeaponType.NONE,
+		"price": 0,
+		"damage": 0,
+		"fire_rate": 0.0,
+		"model_path": "",
+		"kill_reward": 300
+	},
+	WeaponId.AK47: {
+		"name": "AK-47",
+		"type": WeaponType.RIFLE,
+		"price": 2700,
+		"damage": 36,
+		"fire_rate": 0.1,
+		"model_path": "res://resources/weapons/ak47/ak47.glb",
+		"kill_reward": 300
+	},
+	WeaponId.USP: {
+		"name": "USP",
+		"type": WeaponType.PISTOL,
+		"price": 500,
+		"damage": 25,
+		"fire_rate": 0.15,
+		"model_path": "",
+		"kill_reward": 300
+	}
+}
+
+## 武器ID名称
+const WEAPON_ID_NAMES := {
+	WeaponId.NONE: "none",
+	WeaponId.AK47: "ak47",
+	WeaponId.USP: "usp"
+}
 
 ## アニメーションファイルパス（武器タイプ別）
 ## 構造: { WeaponType: { "idle": path, "walking": path, "running": path } }
@@ -302,6 +343,92 @@ static func find_meshes(node: Node) -> Array[MeshInstance3D]:
 	for child in node.get_children():
 		meshes.append_array(find_meshes(child))
 	return meshes
+
+
+## 武器IDから武器タイプを取得
+static func get_weapon_type_from_id(weapon_id: int) -> int:
+	var data = WEAPON_DATA.get(weapon_id, null)
+	if data:
+		return data.type
+	return WeaponType.NONE
+
+
+## 武器IDから武器データを取得
+static func get_weapon_data(weapon_id: int) -> Dictionary:
+	return WEAPON_DATA.get(weapon_id, WEAPON_DATA[WeaponId.NONE])
+
+
+## 武器モデルをロードしてBoneAttachment3Dを作成
+static func create_weapon_attachment(weapon_id: int) -> Node3D:
+	var data = WEAPON_DATA.get(weapon_id, null)
+	if data == null or data.model_path.is_empty():
+		return null
+	
+	var scene = load(data.model_path)
+	if scene == null:
+		print("[CharacterSetup] Failed to load weapon model: %s" % data.model_path)
+		return null
+	
+	var weapon_instance = scene.instantiate()
+	return weapon_instance
+
+
+## キャラクターに武器をアタッチ
+static func attach_weapon_to_character(character: Node, skeleton: Skeleton3D, weapon_id: int, debug_name: String = "") -> Node3D:
+	if skeleton == null:
+		if debug_name:
+			print("[CharacterSetup] %s: No skeleton found for weapon attachment" % debug_name)
+		return null
+	
+	# 既存の武器を削除
+	var existing = character.get_node_or_null("WeaponAttachment")
+	if existing:
+		existing.queue_free()
+	
+	# 武器なしの場合
+	if weapon_id == WeaponId.NONE:
+		return null
+	
+	var data = WEAPON_DATA.get(weapon_id, null)
+	if data == null or data.model_path.is_empty():
+		if debug_name:
+			print("[CharacterSetup] %s: No weapon model for weapon_id %d" % [debug_name, weapon_id])
+		return null
+	
+	# 右手のボーンインデックスを取得
+	var bone_name = "mixamorig_RightHand"
+	var bone_idx = skeleton.find_bone(bone_name)
+	if bone_idx == -1:
+		# 代替ボーン名を試す
+		bone_name = "mixamorig1_RightHand"
+		bone_idx = skeleton.find_bone(bone_name)
+	
+	if bone_idx == -1:
+		if debug_name:
+			print("[CharacterSetup] %s: Could not find hand bone" % debug_name)
+		return null
+	
+	# BoneAttachment3Dを作成
+	var bone_attachment = BoneAttachment3D.new()
+	bone_attachment.name = "WeaponAttachment"
+	bone_attachment.bone_name = bone_name
+	skeleton.add_child(bone_attachment)
+	
+	# 武器モデルをロード
+	var weapon_model = create_weapon_attachment(weapon_id)
+	if weapon_model:
+		bone_attachment.add_child(weapon_model)
+		# 武器の位置・回転を調整（手に合わせる）
+		weapon_model.position = Vector3(0.05, 0.0, 0.0)  # 手のひら位置に調整
+		weapon_model.rotation_degrees = Vector3(0, 90, 0)  # 銃口を前に向ける
+		
+		if debug_name:
+			print("[CharacterSetup] %s: Attached weapon %s to %s" % [debug_name, data.name, bone_name])
+		
+		return bone_attachment
+	
+	bone_attachment.queue_free()
+	return null
 
 
 ## ノードツリーをデバッグ出力

@@ -180,17 +180,10 @@ func buy_weapon(price: int) -> bool:
 	return false
 
 
-## キル報酬
-func on_enemy_killed(weapon_type: String = "default") -> void:
-	var reward: int
-	match weapon_type:
-		"awp":
-			reward = KILL_REWARD_AWP
-		"knife":
-			reward = KILL_REWARD_KNIFE
-		_:
-			reward = KILL_REWARD_DEFAULT
-
+## キル報酬（武器IDベース）
+func on_enemy_killed(weapon_id: int = CharacterSetup.WeaponId.NONE) -> void:
+	var weapon_data = CharacterSetup.get_weapon_data(weapon_id)
+	var reward: int = weapon_data.kill_reward
 	_add_money(reward)
 
 

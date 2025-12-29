@@ -10,6 +10,7 @@ signal path_completed
 signal waypoint_reached(index: int)
 signal died
 signal weapon_type_changed(weapon_type: int)
+signal weapon_changed(weapon_id: int)
 
 @export_group("移動設定")
 @export var walk_speed: float = 3.0
@@ -32,7 +33,12 @@ var is_running: bool = false
 var anim_player: AnimationPlayer = null
 var current_move_state: int = 0  # 0: idle, 1: walk, 2: run
 var current_weapon_type: int = CharacterSetup.WeaponType.NONE
+var current_weapon_id: int = CharacterSetup.WeaponId.NONE
 const ANIM_BLEND_TIME: float = 0.3
+
+# 武器
+var weapon_attachment: Node3D = null
+var skeleton: Skeleton3D = null
 
 # ステータス
 var health: float = 100.0
@@ -63,6 +69,11 @@ func _setup_character() -> void:
 				model.position.y = y_offset
 				print("[%s] Applied Y offset %.3f (from mesh '%s')" % [name, y_offset, mesh.name])
 				break
+
+		# Skeletonを取得（武器装着用）
+		skeleton = CharacterSetup.find_skeleton(model)
+		if skeleton:
+			print("[%s] Skeleton found: %s" % [name, skeleton.name])
 
 		# AnimationPlayerを取得
 		anim_player = CharacterSetup.find_animation_player(model)
@@ -319,3 +330,34 @@ func get_weapon_type() -> int:
 ## 武器タイプ名を取得
 func get_weapon_type_name() -> String:
 	return CharacterSetup.WEAPON_TYPE_NAMES.get(current_weapon_type, "unknown")
+
+
+## 武器を設定（武器IDベース）
+func set_weapon(weapon_id: int) -> void:
+	if current_weapon_id == weapon_id:
+		return
+	
+	current_weapon_id = weapon_id
+	
+	# 武器タイプを更新（アニメーション用）
+	var weapon_type = CharacterSetup.get_weapon_type_from_id(weapon_id)
+	set_weapon_type(weapon_type)
+	
+	# 武器モデルを装着
+	if skeleton:
+		weapon_attachment = CharacterSetup.attach_weapon_to_character(self, skeleton, weapon_id, name)
+	
+	weapon_changed.emit(weapon_id)
+	
+	var weapon_data = CharacterSetup.get_weapon_data(weapon_id)
+	print("[%s] Weapon changed to: %s" % [name, weapon_data.name])
+
+
+## 現在の武器IDを取得
+func get_weapon_id() -> int:
+	return current_weapon_id
+
+
+## 現在の武器データを取得
+func get_weapon_data() -> Dictionary:
+	return CharacterSetup.get_weapon_data(current_weapon_id)
