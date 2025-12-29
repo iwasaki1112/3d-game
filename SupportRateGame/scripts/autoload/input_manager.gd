@@ -166,8 +166,8 @@ func _handle_two_finger_gesture() -> void:
 	var current_distance: float = positions[0].distance_to(positions[1])
 	var current_center: Vector2 = (positions[0] + positions[1]) / 2.0
 
-	# ピンチズーム
-	if last_touch_distance > 0:
+	# ピンチズーム（ゼロ除算防止）
+	if last_touch_distance > 0 and current_distance > 0.01:
 		var zoom_factor := last_touch_distance / current_distance
 		var zoom_delta := (zoom_factor - 1.0) * 10.0  # スケール調整
 		camera_zoom.emit(zoom_delta)

@@ -100,7 +100,7 @@ func _initialize_enemy_fog_of_war() -> void:
 	if FogOfWarManager:
 		for e in GameManager.enemies:
 			if e and is_instance_valid(e):
-				FogOfWarManager._set_character_visible(e, false)
+				FogOfWarManager.set_character_visible(e, false)
 				FogOfWarManager.enemy_visibility[e] = false
 
 
