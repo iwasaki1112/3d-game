@@ -4,7 +4,7 @@ extends Node3D
 ## ズーム、パン、ターゲット追従を管理
 
 @export_group("カメラ設定")
-@export var camera_distance: float = 5.0
+@export var camera_distance: float = 15.0
 @export var camera_angle: float = -60.0  # 斜めアングル（度）
 @export var min_zoom: float = 4.0
 @export var max_zoom: float = 25.0
