@@ -27,6 +27,22 @@ const ANIMATION_FILES := {
 	"running": "res://assets/characters/animations/running.fbx"
 }
 
+## キャラクター別のY位置オフセット（足の位置を揃えるため）
+## GSG9の足はLEETより約0.00069高いので、下げる必要がある
+const CHARACTER_Y_OFFSET := {
+	"leet": 0.0,
+	"gsg9": -0.00069,  # LEETに合わせて下げる
+}
+
+
+## キャラクター名からYオフセットを取得
+static func get_y_offset(character_name: String) -> float:
+	var key = character_name.to_lower()
+	for k in CHARACTER_Y_OFFSET.keys():
+		if k in key:
+			return CHARACTER_Y_OFFSET[k]
+	return 0.0
+
 
 ## モデルにテクスチャとマテリアルを適用
 static func setup_materials(model: Node, debug_name: String = "") -> void:

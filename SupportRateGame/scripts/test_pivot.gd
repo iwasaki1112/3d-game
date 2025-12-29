@@ -12,6 +12,13 @@ func _ready():
 	CharacterSetup.setup_materials(leet_model, "LEET")
 	CharacterSetup.setup_materials(gsg9_model, "GSG9")
 
+	# Yオフセットを適用（足の位置を揃える）
+	var leet_offset = CharacterSetup.get_y_offset("LEET")
+	var gsg9_offset = CharacterSetup.get_y_offset("GSG9")
+	leet_model.position.y += leet_offset
+	gsg9_model.position.y += gsg9_offset
+	print("[TestPivot] Applied Y offsets - LEET: %.6f, GSG9: %.6f" % [leet_offset, gsg9_offset])
+
 	# アニメーション設定
 	var leet_anim = CharacterSetup.find_animation_player(leet_model)
 	if leet_anim:
