@@ -83,7 +83,12 @@ func start_game(mode: GameMode = GameMode.DEFUSE) -> void:
 func start_new_round() -> void:
 	current_round += 1
 	player_health = 100.0
+	player_armor = 0.0
 	is_bomb_planted = false
+
+	# プレイヤーの状態をリセット
+	if player and player.has_method("reset_stats"):
+		player.reset_stats()
 
 	# 購入フェーズへ
 	_set_state(GameState.BUY_PHASE)
@@ -129,7 +134,7 @@ func _end_round(winner: Team) -> void:
 		_add_money(WIN_REWARD)
 		loss_streak = 0
 	else:
-		var loss_reward: int = mini(LOSS_REWARD_BASE + (loss_streak * LOSS_REWARD_INCREMENT), MAX_LOSS_BONUS)
+		var loss_reward: int = min(LOSS_REWARD_BASE + (loss_streak * LOSS_REWARD_INCREMENT), MAX_LOSS_BONUS)
 		_add_money(loss_reward)
 		loss_streak += 1
 

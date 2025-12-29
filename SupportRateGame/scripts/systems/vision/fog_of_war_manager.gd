@@ -9,6 +9,9 @@ signal character_visibility_changed(character: CharacterBody3D, is_visible: bool
 # 登録された視野コンポーネント
 var vision_components: Array = []  # Array of VisionComponent
 
+# コンポーネントごとのコールバックを保存（disconnect用）
+var _component_callbacks: Dictionary = {}  # key: VisionComponent, value: Callable
+
 # 現在の視野ポリゴン（全味方の視野を結合）
 var current_visible_points: Array = []  # Array of Vector3
 
@@ -35,7 +38,7 @@ func _initialize_enemy_visibility() -> void:
 
 	for enemy in GameManager.enemies:
 		if enemy and is_instance_valid(enemy):
-			_set_character_visible(enemy, false)
+			set_character_visible(enemy, false)
 			enemy_visibility[enemy] = false
 
 
@@ -43,15 +46,22 @@ func _initialize_enemy_visibility() -> void:
 func register_vision_component(component: Node) -> void:
 	if component not in vision_components:
 		vision_components.append(component)
-		component.visibility_changed.connect(_on_visibility_changed.bind(component))
+		# バインドされたCallableを保存して、後でdisconnectできるようにする
+		var callback := _on_visibility_changed.bind(component)
+		_component_callbacks[component] = callback
+		component.visibility_changed.connect(callback)
 
 
 ## 視野コンポーネントを解除
 func unregister_vision_component(component: Node) -> void:
 	if component in vision_components:
 		vision_components.erase(component)
-		if component.visibility_changed.is_connected(_on_visibility_changed):
-			component.visibility_changed.disconnect(_on_visibility_changed)
+		# 保存したCallableを使ってdisconnect
+		if component in _component_callbacks:
+			var callback: Callable = _component_callbacks[component]
+			if component.visibility_changed.is_connected(callback):
+				component.visibility_changed.disconnect(callback)
+			_component_callbacks.erase(component)
 
 
 ## 視野が更新されたときのコールバック
@@ -96,20 +106,20 @@ func _update_enemy_visibility() -> void:
 			character_visibility_changed.emit(enemy, is_visible)
 
 			# 敵の表示/非表示を切り替え
-			_set_character_visible(enemy, is_visible)
+			set_character_visible(enemy, is_visible)
 
 
-## キャラクターの表示/非表示を設定
-func _set_character_visible(character: CharacterBody3D, visible: bool) -> void:
+## キャラクターの表示/非表示を設定（公開API）
+func set_character_visible(character: CharacterBody3D, is_visible: bool) -> void:
 	if not character:
 		return
 
 	# CharacterModelを取得して可視性を設定
 	var model := character.get_node_or_null("CharacterModel")
 	if model:
-		model.visible = visible
+		model.visible = is_visible
 	else:
-		character.visible = visible
+		character.visible = is_visible
 
 
 ## 敵が現在視野内かどうか
@@ -126,7 +136,7 @@ func reset_visibility() -> void:
 	if GameManager:
 		for enemy in GameManager.enemies:
 			if enemy and is_instance_valid(enemy):
-				_set_character_visible(enemy, false)
+				set_character_visible(enemy, false)
 
 	fog_updated.emit()
 

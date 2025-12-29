@@ -72,6 +72,9 @@ func _setup_camera_system() -> void:
 		camera_controller.camera = player_camera
 		camera_controller.follow_target = player
 
+		# カメラをアクティブに設定
+		player_camera.current = true
+
 		# 即座にカメラを配置
 		camera_controller.snap_to_target()
 
@@ -100,7 +103,7 @@ func _initialize_enemy_fog_of_war() -> void:
 	if FogOfWarManager:
 		for e in GameManager.enemies:
 			if e and is_instance_valid(e):
-				FogOfWarManager._set_character_visible(e, false)
+				FogOfWarManager.set_character_visible(e, false)
 				FogOfWarManager.enemy_visibility[e] = false
 
 
