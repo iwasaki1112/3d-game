@@ -10,6 +10,12 @@ extends CanvasLayer
 @onready var final_score_label: Label = $GameOverPanel/VBoxContainer/FinalScoreLabel
 @onready var restart_button: Button = $GameOverPanel/VBoxContainer/RestartButton
 
+# Shopping UI
+@onready var shopping_panel: Panel = $ShoppingPanel
+@onready var none_button: Button = $ShoppingPanel/VBoxContainer/NoneButton
+@onready var rifle_button: Button = $ShoppingPanel/VBoxContainer/RifleButton
+@onready var pistol_button: Button = $ShoppingPanel/VBoxContainer/PistolButton
+
 # デバッグ用
 var debug_label: Label = null
 
@@ -31,7 +37,13 @@ func _ready() -> void:
 	debug_label.offset_bottom = -10
 	add_child(debug_label)
 	game_over_panel.visible = false
+	shopping_panel.visible = false
 	restart_button.pressed.connect(_on_restart_button_pressed)
+
+	# Shopping buttons
+	none_button.pressed.connect(_on_none_button_pressed)
+	rifle_button.pressed.connect(_on_rifle_button_pressed)
+	pistol_button.pressed.connect(_on_pistol_button_pressed)
 
 	# GameManagerのシグナルに接続
 	GameManager.money_changed.connect(_on_money_changed)
@@ -90,10 +102,15 @@ func _on_money_changed(amount: int) -> void:
 
 func _on_game_state_changed(new_state: GameManager.GameState) -> void:
 	match new_state:
+		GameManager.GameState.BUY_PHASE:
+			shopping_panel.visible = true
+		GameManager.GameState.PLAYING:
+			shopping_panel.visible = false
 		GameManager.GameState.GAME_OVER:
+			shopping_panel.visible = false
 			_show_game_over()
 		_:
-			pass
+			shopping_panel.visible = false
 
 
 func _on_round_started(_round_number: int) -> void:
@@ -138,3 +155,22 @@ func _update_debug_info() -> void:
 		player_pos.x, player_pos.y, player_pos.z,
 		"Yes" if on_floor else "No"
 	]
+
+
+## Shopping button handlers
+func _on_none_button_pressed() -> void:
+	_set_player_weapon(CharacterSetup.WeaponType.NONE)
+
+
+func _on_rifle_button_pressed() -> void:
+	_set_player_weapon(CharacterSetup.WeaponType.RIFLE)
+
+
+func _on_pistol_button_pressed() -> void:
+	_set_player_weapon(CharacterSetup.WeaponType.PISTOL)
+
+
+func _set_player_weapon(weapon_type: int) -> void:
+	if GameManager.player:
+		GameManager.player.set_weapon_type(weapon_type)
+		print("[GameUI] Set player weapon to: %s" % CharacterSetup.WEAPON_TYPE_NAMES.get(weapon_type, "unknown"))
