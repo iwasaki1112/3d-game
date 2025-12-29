@@ -3,6 +3,8 @@ extends CharacterBody3D
 ## タクティカルシューター プレイヤーコントローラー
 ## パス追従移動 + 自動射撃
 
+const CharacterSetup = preload("res://scripts/utils/character_setup.gd")
+
 signal path_completed
 signal waypoint_reached(index: int)
 
@@ -58,54 +60,19 @@ func _ready() -> void:
 	# アニメーションプレイヤーを取得
 	var model = get_node_or_null("CharacterModel")
 	if model:
-		print("[Player] %s: CharacterModel tree:" % name)
-		_print_tree(model, 0)
+		print("[Player] %s: CharacterModel found" % name)
 
-		# マテリアルを光対応に設定
-		_setup_lit_materials(model)
+		# CharacterSetupを使用してマテリアルとテクスチャを設定
+		CharacterSetup.setup_materials(model, name)
 
-		anim_player = model.get_node_or_null("AnimationPlayer")
+		anim_player = CharacterSetup.find_animation_player(model)
 		if anim_player:
 			print("[Player] %s: AnimationPlayer found" % name)
-			print("[Player] %s: AnimationPlayer root: %s" % [name, anim_player.root_node])
-			# パスが解決できるか確認
-			var root = anim_player.get_node_or_null(anim_player.root_node)
-			if root:
-				var skel = root.get_node_or_null("Armature/Skeleton3D")
-				print("[Player] %s: Root node: %s, Skeleton found: %s" % [name, root.name, skel != null])
-			# まず元のアニメーションを試す
-			var orig_anims = anim_player.get_animation_list()
-			print("[Player] %s: Original animations: %s" % [name, orig_anims])
-			if orig_anims.size() > 0:
-				var first_anim = orig_anims[0]
-				var anim = anim_player.get_animation(first_anim)
-				if anim and anim.get_track_count() > 0:
-					print("[Player] %s: First orig anim '%s' path[0]: %s" % [name, first_anim, anim.track_get_path(0)])
-
-			# 元のFBXアニメーションの内容を詳しく確認
-			if orig_anims.size() > 0:
-				var test_anim_name = orig_anims[0]
-				var test_anim = anim_player.get_animation(test_anim_name)
-				if test_anim:
-					print("[Player] %s: Animation '%s' details:" % [name, test_anim_name])
-					print("[Player] %s:   Length: %f sec" % [name, test_anim.length])
-					print("[Player] %s:   Track count: %d" % [name, test_anim.get_track_count()])
-					# 最初の5トラックを表示
-					for i in range(min(5, test_anim.get_track_count())):
-						var path = test_anim.track_get_path(i)
-						var track_type = test_anim.track_get_type(i)
-						var key_count = test_anim.track_get_key_count(i)
-						print("[Player] %s:   Track %d: path=%s, type=%d, keys=%d" % [name, i, path, track_type, key_count])
-						# 最初のキーの値を表示
-						if key_count > 0:
-							var key_time = test_anim.track_get_key_time(i, 0)
-							var key_val = test_anim.track_get_key_value(i, 0)
-							print("[Player] %s:     Key0: time=%f, val=%s" % [name, key_time, key_val])
-
-			_load_animations()
+			# CharacterSetupを使用してアニメーションを読み込む
+			CharacterSetup.load_animations(anim_player, model, name)
 			if anim_player.has_animation("idle"):
 				anim_player.play("idle")
-				print("[Player] %s: Playing idle, current=%s, is_playing=%s" % [name, anim_player.current_animation, anim_player.is_playing()])
+				print("[Player] %s: Playing idle" % name)
 		else:
 			print("[Player] %s: NO AnimationPlayer!" % name)
 	else:
@@ -331,89 +298,6 @@ func _handle_screen_drag(event: InputEventScreenDrag) -> void:
 	last_touch_center = current_center
 
 
-## アニメーション読み込み
-func _load_animations() -> void:
-	var lib = anim_player.get_animation_library("")
-	if lib == null:
-		print("[Player] %s: No animation library found!" % name)
-		return
-
-	print("[Player] %s: Loading animations..." % name)
-	# スケルトンのボーン名を確認
-	var char_model = get_node_or_null("CharacterModel")
-	if char_model:
-		var skeleton = char_model.get_node_or_null("Armature/Skeleton3D")
-		if skeleton:
-			var bone_names = []
-			for i in range(min(3, skeleton.get_bone_count())):
-				bone_names.append(skeleton.get_bone_name(i))
-			print("[Player] %s: Skeleton bones: %s" % [name, bone_names])
-	_load_animation_from_fbx(lib, "res://assets/characters/animations/idle.fbx", "idle")
-	_load_animation_from_fbx(lib, "res://assets/characters/animations/walking.fbx", "walking")
-	_load_animation_from_fbx(lib, "res://assets/characters/animations/running.fbx", "running")
-	print("[Player] %s: Available animations: %s" % [name, anim_player.get_animation_list()])
-
-
-func _load_animation_from_fbx(lib: AnimationLibrary, path: String, anim_name: String) -> void:
-	var scene = load(path)
-	if scene == null:
-		print("[Player] %s: Failed to load %s" % [name, path])
-		return
-
-	var instance = scene.instantiate()
-	var scene_anim_player = instance.get_node_or_null("AnimationPlayer")
-	if scene_anim_player:
-		for anim_name_in_lib in scene_anim_player.get_animation_list():
-			var anim = scene_anim_player.get_animation(anim_name_in_lib)
-			if anim:
-				# 最初のアニメーションの詳細を表示（Playerのみ）
-				if name == "Player" and anim_name == "idle":
-					print("[Player] %s: %s - length: %f, tracks: %d" % [name, anim_name, anim.length, anim.get_track_count()])
-					# トラックタイプの統計
-					var type_counts = {}
-					for i in range(anim.get_track_count()):
-						var t = anim.track_get_type(i)
-						type_counts[t] = type_counts.get(t, 0) + 1
-					print("[Player] %s: Track types: %s" % [name, type_counts])
-					# 最初の10トラックを表示
-					for i in range(min(10, anim.get_track_count())):
-						var p = anim.track_get_path(i)
-						var t = anim.track_get_type(i)
-						var k = anim.track_get_key_count(i)
-						print("[Player] %s:   [%d] %s (type=%d, keys=%d)" % [name, i, p, t, k])
-
-				var anim_copy = anim.duplicate()
-				anim_copy.loop_mode = Animation.LOOP_LINEAR
-				_adjust_animation_paths(anim_copy)
-				lib.add_animation(anim_name, anim_copy)
-				break
-	else:
-		print("[Player] %s: No AnimationPlayer in %s" % [name, path])
-	instance.queue_free()
-
-
-## アニメーションのトラックパスをモデル階層に合わせて調整
-func _adjust_animation_paths(anim: Animation) -> void:
-	var model = get_node_or_null("CharacterModel")
-	if model == null:
-		return
-
-	# Armatureノードが存在するかチェック
-	var has_armature = model.get_node_or_null("Armature") != null
-
-	# トラックパスを調整
-	for i in range(anim.get_track_count()):
-		var track_path = anim.track_get_path(i)
-		var path_str = str(track_path)
-
-		# ボーン名の違いを修正（アニメーションは"mixamorig1_"、キャラクターは"mixamorig_"）
-		path_str = path_str.replace("mixamorig1_", "mixamorig_")
-
-		# Armatureノードがある場合のみプレフィックスを追加
-		if has_armature and path_str.begins_with("Skeleton3D:"):
-			path_str = "Armature/" + path_str
-
-		anim.track_set_path(i, NodePath(path_str))
 
 
 ## アニメーション更新
@@ -445,83 +329,3 @@ func _update_animation() -> void:
 					anim_player.speed_scale = 1.5
 
 
-## キャラクターモデルのマテリアルを光対応に設定＋テクスチャ適用
-func _setup_lit_materials(node: Node) -> void:
-	if node is MeshInstance3D:
-		var mesh_instance := node as MeshInstance3D
-		# 影をキャストするように設定
-		mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-
-		# メッシュ名に基づいてテクスチャを適用
-		_apply_textures_to_mesh(mesh_instance)
-
-	# 子ノードを再帰的に処理
-	for child in node.get_children():
-		_setup_lit_materials(child)
-
-
-## メッシュにテクスチャを適用
-func _apply_textures_to_mesh(mesh_instance: MeshInstance3D) -> void:
-	var mesh_name = mesh_instance.name.to_lower()
-	var albedo_path := ""
-	var normal_path := ""
-
-	# メッシュ名に基づいてテクスチャパスを決定
-	if "t_leet_glass" in mesh_name:
-		albedo_path = "res://assets/characters/leet/t_leet_glass.tga"
-	elif "t_leet" in mesh_name:
-		albedo_path = "res://assets/characters/leet/t_leet.tga"
-		normal_path = "res://assets/characters/leet/t_leet_normal.tga"
-	elif "ct_gsg9" in mesh_name:
-		albedo_path = "res://assets/characters/gsg9/ct_gsg9.tga"
-		normal_path = "res://assets/characters/gsg9/ct_gsg9_normal.tga"
-
-	if albedo_path.is_empty():
-		return
-
-	# テクスチャをロード
-	var albedo_tex = load(albedo_path) as Texture2D
-	if albedo_tex == null:
-		print("[Player] %s: Failed to load texture: %s" % [name, albedo_path])
-		return
-
-	var normal_tex: Texture2D = null
-	if not normal_path.is_empty():
-		normal_tex = load(normal_path) as Texture2D
-
-	# 各サーフェスにマテリアルを適用
-	if mesh_instance.mesh:
-		var surface_count = mesh_instance.mesh.get_surface_count()
-		for i in range(surface_count):
-			var mat = mesh_instance.get_active_material(i)
-			var new_mat: StandardMaterial3D
-
-			if mat and mat is StandardMaterial3D:
-				new_mat = mat.duplicate() as StandardMaterial3D
-			else:
-				new_mat = StandardMaterial3D.new()
-
-			new_mat.albedo_texture = albedo_tex
-			new_mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
-
-			if normal_tex:
-				new_mat.normal_enabled = true
-				new_mat.normal_texture = normal_tex
-
-			mesh_instance.set_surface_override_material(i, new_mat)
-
-	print("[Player] %s: Applied texture to mesh '%s'" % [name, mesh_instance.name])
-
-
-func _print_tree(node: Node, depth: int) -> void:
-	var indent = "  ".repeat(depth)
-	var extra = ""
-	if node is MeshInstance3D:
-		var mi = node as MeshInstance3D
-		extra = " [mesh=%s, visible=%s, pos=%s, scale=%s]" % [mi.mesh != null, mi.visible, mi.position, mi.global_transform.basis.get_scale()]
-	elif node is Node3D:
-		var n3d = node as Node3D
-		extra = " [pos=%s, scale=%s]" % [n3d.position, n3d.global_transform.basis.get_scale()]
-	print("[Player] %s%s (%s)%s" % [indent, node.name, node.get_class(), extra])
-	for child in node.get_children():
-		_print_tree(child, depth + 1)
