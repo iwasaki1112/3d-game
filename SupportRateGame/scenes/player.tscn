@@ -1,7 +1,7 @@
 [gd_scene load_steps=5 format=3 uid="uid://cplayer"]
 
 [ext_resource type="Script" path="res://scripts/characters/player.gd" id="1_player"]
-[ext_resource type="PackedScene" uid="uid://dtsmyimekx8ye" path="res://assets/characters/leet/leet.fbx" id="2_character"]
+[ext_resource type="PackedScene" uid="uid://cpmgyp4xd80ck" path="res://assets/characters/gsg9/gsg9.fbx" id="2_character"]
 [ext_resource type="Script" path="res://scripts/systems/vision/vision_component.gd" id="3_vision"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
