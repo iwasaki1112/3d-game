@@ -101,9 +101,14 @@ func _on_money_changed(amount: int) -> void:
 
 
 func _on_game_state_changed(new_state: GameManager.GameState) -> void:
+	print("[GameUI] State changed to: %s" % GameManager.GameState.keys()[new_state])
 	match new_state:
 		GameManager.GameState.BUY_PHASE:
-			shopping_panel.visible = true
+			if shopping_panel:
+				shopping_panel.visible = true
+				print("[GameUI] Shopping panel shown, visible=%s" % shopping_panel.visible)
+			else:
+				print("[GameUI] ERROR: shopping_panel is null!")
 		GameManager.GameState.PLAYING:
 			shopping_panel.visible = false
 		GameManager.GameState.GAME_OVER:

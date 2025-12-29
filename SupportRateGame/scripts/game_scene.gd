@@ -29,8 +29,8 @@ func _ready() -> void:
 	_setup_camera_system()
 	_setup_fog_of_war()
 
-	# ゲームを開始
-	GameManager.start_game()
+	# ゲームを開始（すべてのノードがreadyになった後に実行）
+	GameManager.start_game.call_deferred()
 
 
 func _exit_tree() -> void:
