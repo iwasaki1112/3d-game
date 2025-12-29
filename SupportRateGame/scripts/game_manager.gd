@@ -18,7 +18,7 @@ enum GameMode { DEFUSE, HOSTAGE }
 
 # ゲーム設定
 const ROUND_TIME: float = 105.0  # 1分45秒
-const BUY_TIME: float = 1.0  # デバッグ用（本番は15.0）
+const BUY_TIME: float = 3.0  # 購入フェーズ時間
 const BOMB_TIME: float = 40.0
 const MAX_ROUNDS: int = 15  # 勝利に必要なラウンド数（MR15）
 const STARTING_MONEY: int = 800
