@@ -40,7 +40,7 @@ const WEAPON_DATA := {
 	WeaponId.AK47: {
 		"name": "AK-47",
 		"type": WeaponType.RIFLE,
-		"price": 2700,
+		"price": 0,
 		"damage": 36,
 		"fire_rate": 0.1,
 		"scene_path": "res://scenes/weapons/ak47.tscn",  # シーンファイルを使用
