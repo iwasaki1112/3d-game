@@ -5,7 +5,7 @@ extends Node3D
 ## プレイヤーの視野範囲を3Dで描画
 
 @export_group("表示設定")
-@export var fog_height: float = 0.1  # 視野を描画する高さ（地面付近）
+@export var fog_height: float = 0.05  # 視野を描画する高さ（地面付近）
 @export var visible_color: Color = Color(1.0, 1.0, 0.5, 0.3)  # 視野内の色（薄い黄色）
 
 # メッシュインスタンス
@@ -40,6 +40,7 @@ func _get_fog_of_war_manager() -> Node:
 func _setup_visibility_layer() -> void:
 	visibility_mesh_instance = MeshInstance3D.new()
 	visibility_mesh_instance.name = "VisibilityMesh"
+	visibility_mesh_instance.extra_cull_margin = 1000.0  # カリング防止
 	add_child(visibility_mesh_instance)
 
 	# マテリアルを作成

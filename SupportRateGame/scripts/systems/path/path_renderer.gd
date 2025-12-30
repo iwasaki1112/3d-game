@@ -9,7 +9,7 @@ const PathAnalyzerClass = preload("res://scripts/systems/path/path_analyzer.gd")
 @export var path_color_walk: Color = Color(0.0, 1.0, 0.0, 0.5)
 @export var path_color_run: Color = Color(1.0, 0.5, 0.0, 0.5)
 @export var path_width: float = 0.15
-@export var path_height_offset: float = 0.001
+@export var path_height_offset: float = 0.05
 @export var smoothing_segments: int = 5
 
 # キャラクターカラー（設定時に使用）
@@ -34,6 +34,7 @@ func _ready() -> void:
 	path_mesh_instance_walk.mesh = immediate_mesh_walk
 	path_mesh_instance_walk.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	path_mesh_instance_walk.material_override = _create_path_material(path_color_walk, Color(0.0, 1.0, 0.0, 1.0))
+	path_mesh_instance_walk.extra_cull_margin = 1000.0  # カリング防止
 	add_child(path_mesh_instance_walk)
 
 	# 走り用メッシュを作成
@@ -42,6 +43,7 @@ func _ready() -> void:
 	path_mesh_instance_run.mesh = immediate_mesh_run
 	path_mesh_instance_run.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	path_mesh_instance_run.material_override = _create_path_material(path_color_run, Color(1.0, 0.5, 0.0, 1.0))
+	path_mesh_instance_run.extra_cull_margin = 1000.0  # カリング防止
 	add_child(path_mesh_instance_run)
 
 
