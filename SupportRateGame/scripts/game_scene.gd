@@ -68,9 +68,7 @@ func _on_squad_player_selected(player_data: RefCounted, _index: int) -> void:
 	if path_manager:
 		path_manager.set_player(selected_player)
 
-	# カメラの追従対象を更新
-	if camera_controller:
-		camera_controller.follow_target = selected_player
+	# カメラは自動追従しない（2本指/WASDでのみ移動）
 
 	print("[GameScene] Player selected via SquadManager: %s" % selected_player.name)
 
@@ -189,13 +187,12 @@ func _setup_camera_system() -> void:
 		# カメラをコントローラーに追加
 		camera_controller.add_child(player_camera)
 		camera_controller.camera = player_camera
-		camera_controller.follow_target = selected_player
 
 		# カメラをアクティブに設定
 		player_camera.current = true
 
-		# 即座にカメラを配置
-		camera_controller.snap_to_target()
+		# 初期カメラ位置をプレイヤー位置に設定（追従はしない）
+		camera_controller.snap_to_position(selected_player.global_position)
 
 
 ## Fog of Warシステムをセットアップ
