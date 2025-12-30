@@ -26,8 +26,14 @@ var current_patrol_index: int = 0
 func _ready() -> void:
 	super._ready()
 
+	# 敵グループに追加（グループベース管理）
+	add_to_group("enemies")
+
 	# 死亡シグナルを接続
 	died.connect(_on_enemy_died)
+
+	# シーン離脱時にグループから自動削除されるが、明示的に処理
+	tree_exiting.connect(_on_tree_exiting)
 
 
 func _physics_process(delta: float) -> void:
@@ -169,7 +175,15 @@ func _detect_player() -> bool:
 ## 敵死亡時の処理
 func _on_enemy_died() -> void:
 	enemy_died.emit()
-	GameManager.enemy_died.emit(self)
+	# GameEventsを通じて死亡を通知（killer不明の場合はnull）
+	if has_node("/root/GameEvents"):
+		get_node("/root/GameEvents").unit_killed.emit(null, self, 0)
+
+
+## シーン離脱時の処理
+func _on_tree_exiting() -> void:
+	# グループからは自動削除されるので特別な処理は不要
+	pass
 
 
 ## チームを設定

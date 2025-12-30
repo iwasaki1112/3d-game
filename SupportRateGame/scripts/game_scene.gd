@@ -5,12 +5,13 @@ extends Node3D
 ## プレイヤー管理はSquadManagerに委譲
 ## ラウンド/経済はMatchManagerに委譲
 
-const PathManager = preload("res://scripts/systems/path/path_manager.gd")
-const CameraController = preload("res://scripts/systems/camera_controller.gd")
-const FogOfWarRendererScript = preload("res://scripts/systems/vision/fog_of_war_renderer.gd")
-const FogOfWarManagerScript = preload("res://scripts/systems/vision/fog_of_war_manager.gd")
-const MatchManagerScript = preload("res://scripts/systems/match_manager.gd")
-const SquadManagerScript = preload("res://scripts/systems/squad_manager.gd")
+# システムノードのPackedScene（instantiate()で生成）
+const SquadManagerScene = preload("res://scenes/systems/squad_manager.tscn")
+const MatchManagerScene = preload("res://scenes/systems/match_manager.tscn")
+const PathManagerScene = preload("res://scenes/systems/path_manager.tscn")
+const CameraControllerScene = preload("res://scenes/systems/camera_controller.tscn")
+const FogOfWarManagerScene = preload("res://scenes/systems/fog_of_war_manager.tscn")
+const FogOfWarRendererScene = preload("res://scenes/systems/fog_of_war_renderer.tscn")
 
 @onready var players_node: Node3D = $Players
 @onready var enemies_node: Node3D = $Enemies
@@ -47,14 +48,10 @@ func _ready() -> void:
 		squad_manager.initialize_squad(players)
 		squad_manager.player_selected.connect(_on_squad_player_selected)
 
-	# 敵を収集
+	# 敵を収集（敵はenemyスクリプトでグループに自動追加される）
 	for child in enemies_node.get_children():
 		if child is CharacterBody3D:
 			enemies.append(child)
-
-	# 敵を敵リストに追加
-	for enemy in enemies:
-		GameManager.enemies.append(enemy)
 
 	print("[GameScene] Players: %d, Enemies: %d" % [players.size(), enemies.size()])
 
@@ -91,7 +88,7 @@ func _exit_tree() -> void:
 	GameManager.unregister_squad_manager()
 	GameManager.unregister_fog_of_war_manager()
 	GameManager.stop_game()
-	GameManager.enemies.clear()
+	# 敵はグループで管理されるため、シーン離脱時に自動クリーンアップ
 
 
 func _process(_delta: float) -> void:
@@ -161,9 +158,7 @@ func _find_and_select_player_at_position(world_pos: Vector3) -> bool:
 
 ## SquadManagerをセットアップ
 func _setup_squad_manager() -> void:
-	squad_manager = Node.new()
-	squad_manager.name = "SquadManager"
-	squad_manager.set_script(SquadManagerScript)
+	squad_manager = SquadManagerScene.instantiate()
 	add_child(squad_manager)
 
 	# GameManagerに登録
@@ -174,9 +169,7 @@ func _setup_squad_manager() -> void:
 
 ## FogOfWarManagerをセットアップ
 func _setup_fog_of_war_manager() -> void:
-	fog_of_war_manager = Node.new()
-	fog_of_war_manager.name = "FogOfWarManager"
-	fog_of_war_manager.set_script(FogOfWarManagerScript)
+	fog_of_war_manager = FogOfWarManagerScene.instantiate()
 	add_child(fog_of_war_manager)
 
 	# GameManagerに登録
@@ -187,9 +180,7 @@ func _setup_fog_of_war_manager() -> void:
 
 ## MatchManagerをセットアップ
 func _setup_match_manager() -> void:
-	match_manager = Node.new()
-	match_manager.name = "MatchManager"
-	match_manager.set_script(MatchManagerScript)
+	match_manager = MatchManagerScene.instantiate()
 	add_child(match_manager)
 
 	# GameManagerに登録
@@ -200,9 +191,7 @@ func _setup_match_manager() -> void:
 
 ## パスシステムをセットアップ
 func _setup_path_system() -> void:
-	path_manager = Node3D.new()
-	path_manager.name = "PathManager"
-	path_manager.set_script(PathManager)
+	path_manager = PathManagerScene.instantiate()
 	add_child(path_manager)
 
 	# プレイヤー参照を設定
@@ -242,9 +231,7 @@ func _setup_camera_system() -> void:
 		# カメラをプレイヤーから切り離してシーンルートに配置
 		player_camera.get_parent().remove_child(player_camera)
 
-		camera_controller = Node3D.new()
-		camera_controller.name = "CameraController"
-		camera_controller.set_script(CameraController)
+		camera_controller = CameraControllerScene.instantiate()
 		add_child(camera_controller)
 
 		# カメラをコントローラーに追加
@@ -260,9 +247,7 @@ func _setup_camera_system() -> void:
 
 ## Fog of Warレンダラーをセットアップ
 func _setup_fog_of_war_renderer() -> void:
-	fog_renderer = Node3D.new()
-	fog_renderer.name = "FogOfWarRenderer"
-	fog_renderer.set_script(FogOfWarRendererScript)
+	fog_renderer = FogOfWarRendererScene.instantiate()
 	add_child(fog_renderer)
 
 	# マップ範囲を設定（dust3マップ用）
@@ -280,7 +265,9 @@ func _initialize_enemy_fog_of_war() -> void:
 	await get_tree().process_frame
 
 	if fog_of_war_manager:
-		for e in GameManager.enemies:
+		# グループから敵を取得
+		var enemy_nodes := get_tree().get_nodes_in_group("enemies")
+		for e in enemy_nodes:
 			if e and is_instance_valid(e):
 				fog_of_war_manager.set_character_visible(e, false)
 				fog_of_war_manager.enemy_visibility[e] = false

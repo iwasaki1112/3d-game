@@ -66,6 +66,24 @@ func _get_squad_manager() -> Node:
 	return GameManager.squad_manager if GameManager else null
 
 
+## 生存している敵の数を取得（グループベース）
+func _count_alive_enemies() -> int:
+	var count := 0
+	var enemies := get_tree().get_nodes_in_group("enemies")
+	for enemy in enemies:
+		if enemy and is_instance_valid(enemy):
+			# is_character_alive()メソッドまたはis_aliveプロパティで判定
+			if enemy.has_method("is_character_alive"):
+				if enemy.is_character_alive():
+					count += 1
+			elif "is_alive" in enemy:
+				if enemy.is_alive:
+					count += 1
+			else:
+				count += 1  # 判定手段がない場合は生存とみなす
+	return count
+
+
 ## マッチ開始
 func start_match() -> void:
 	current_round = 0
@@ -161,15 +179,8 @@ func _check_round_end_conditions() -> bool:
 		_end_round(Team.TERRORIST if player_team == Team.CT else Team.CT)
 		return true
 
-	# 全敵死亡
-	var enemies_alive := 0
-	if GameManager:
-		for enemy in GameManager.enemies:
-			if enemy and is_instance_valid(enemy):
-				if enemy.has_method("is_alive") and enemy.is_alive():
-					enemies_alive += 1
-				elif not enemy.has_method("is_alive"):
-					enemies_alive += 1
+	# 全敵死亡（グループから取得）
+	var enemies_alive := _count_alive_enemies()
 
 	if enemies_alive == 0:
 		_end_round(player_team)
@@ -267,16 +278,8 @@ func _on_unit_killed(killer: Node3D, _victim: Node3D, weapon_id: int) -> void:
 	if sm and sm.get_alive_count() == 0:
 		_end_round(Team.TERRORIST if player_team == Team.CT else Team.CT)
 
-	# 全敵死亡チェック
-	var enemies_alive := 0
-	if GameManager:
-		for enemy in GameManager.enemies:
-			if enemy and is_instance_valid(enemy):
-				# 敵が生きているかチェック（has_methodでis_aliveを確認）
-				if enemy.has_method("is_alive") and enemy.is_alive():
-					enemies_alive += 1
-				elif not enemy.has_method("is_alive"):
-					enemies_alive += 1  # メソッドがない場合は生存とみなす
+	# 全敵死亡チェック（グループから取得）
+	var enemies_alive := _count_alive_enemies()
 
 	if enemies_alive == 0 and is_playing():
 		_end_round(player_team)

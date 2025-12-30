@@ -141,59 +141,75 @@ Idle → Patrol → Alert → Combat → Dead
 - **Alert**: 音や視覚刺激で警戒、発生源を調査
 - **Combat**: 射撃、遮蔽物利用、仲間呼び出し
 
+#### 敵グループ管理
+敵はGodotのグループ機能で管理されます。
+
+**重要**: 敵キャラクターは必ず `enemies` グループに追加する必要があります。
+- 現在の実装: `enemy.gd` の `_ready()` で `add_to_group("enemies")` を呼び出し
+- 派生クラスや別実装の敵を作成する場合は、同様にグループ追加が必要
+- グループ未追加の敵は勝敗判定・視界処理の対象外になる
+
+```gdscript
+# 敵スクリプトで必須
+func _ready() -> void:
+    add_to_group("enemies")
+```
+
 ---
 
 ## ファイル構造
 
 ```
-SupportRateGame/
+3d-game/                           # プロジェクトルート
 ├── docs/
 │   └── GAME_DESIGN.md            # この文書
-├── scenes/
-│   ├── game.tscn                 # メインゲームシーン
-│   ├── title.tscn                # タイトル画面
-│   ├── player.tscn               # プレイヤー
-│   └── enemy.tscn                # 敵
-├── scripts/
-│   ├── autoload/                 # シングルトン（薄く保つ）
-│   │   ├── game_events.gd        # イベントバス - システム間連携
-│   │   ├── game_manager.gd       # シーン遷移・設定・参照保持のみ
-│   │   └── input_manager.gd      # 入力管理
-│   ├── characters/
-│   │   ├── character_base.gd     # キャラクター基底クラス
-│   │   ├── player.gd             # プレイヤー
-│   │   ├── enemy.gd              # 敵AI
-│   │   └── components/
-│   │       └── vision_component.gd  # 視野コンポーネント
-│   ├── systems/                  # シーン内ノード
-│   │   ├── match_manager.gd      # ラウンド/経済/勝敗
-│   │   ├── squad_manager.gd      # 5人分隊管理（シーンノード）
-│   │   ├── camera_controller.gd  # カメラ制御
-│   │   ├── path/
-│   │   │   ├── path_manager.gd   # パス管理
-│   │   │   ├── path_renderer.gd  # 3D描画
-│   │   │   └── path_analyzer.gd  # 2D論理座標解析
-│   │   └── vision/
-│   │       ├── fog_of_war_manager.gd   # 視界管理（シーンノード）
-│   │       └── fog_of_war_renderer.gd  # 視界描画
-│   ├── resources/
-│   │   └── economy_rules.gd      # 経済ルール（Resource）
-│   ├── data/
-│   │   └── player_data.gd        # プレイヤーデータ
-│   ├── utils/
-│   │   └── character_setup.gd    # 武器データ等
-│   ├── game_scene.gd             # ゲームシーン管理
-│   ├── game_ui.gd                # UI管理
-│   └── title_screen.gd           # タイトル
-├── resources/
-│   ├── economy_rules.tres        # 経済ルール設定ファイル
-│   └── maps/
-│       └── dust3/                # PBRマップ
-├── shaders/
-│   └── fog_of_war.gdshader       # 視界シェーダー
-└── assets/
-    ├── characters/               # キャラクターモデル
-    └── maps/                     # マップ
+├── CLAUDE.md                     # 開発ルール
+└── SupportRateGame/              # Godotプロジェクト
+    ├── scenes/
+    │   ├── game.tscn                 # メインゲームシーン
+    │   ├── title.tscn                # タイトル画面
+    │   ├── player.tscn               # プレイヤー
+    │   └── enemy.tscn                # 敵
+    ├── scripts/
+    │   ├── autoload/                 # シングルトン（薄く保つ）
+    │   │   ├── game_events.gd        # イベントバス - システム間連携
+    │   │   ├── game_manager.gd       # シーン遷移・設定・参照保持のみ
+    │   │   └── input_manager.gd      # 入力管理
+    │   ├── characters/
+    │   │   ├── character_base.gd     # キャラクター基底クラス
+    │   │   ├── player.gd             # プレイヤー
+    │   │   ├── enemy.gd              # 敵AI
+    │   │   └── components/
+    │   │       └── vision_component.gd  # 視野コンポーネント
+    │   ├── systems/                  # シーン内ノード
+    │   │   ├── match_manager.gd      # ラウンド/経済/勝敗
+    │   │   ├── squad_manager.gd      # 5人分隊管理（シーンノード）
+    │   │   ├── camera_controller.gd  # カメラ制御
+    │   │   ├── path/
+    │   │   │   ├── path_manager.gd   # パス管理
+    │   │   │   ├── path_renderer.gd  # 3D描画
+    │   │   │   └── path_analyzer.gd  # 2D論理座標解析
+    │   │   └── vision/
+    │   │       ├── fog_of_war_manager.gd   # 視界管理（シーンノード）
+    │   │       └── fog_of_war_renderer.gd  # 視界描画
+    │   ├── resources/
+    │   │   └── economy_rules.gd      # 経済ルール（Resource）
+    │   ├── data/
+    │   │   └── player_data.gd        # プレイヤーデータ
+    │   ├── utils/
+    │   │   └── character_setup.gd    # 武器データ等
+    │   ├── game_scene.gd             # ゲームシーン管理
+    │   ├── game_ui.gd                # UI管理
+    │   └── title_screen.gd           # タイトル
+    ├── resources/
+    │   ├── economy_rules.tres        # 経済ルール設定ファイル
+    │   └── maps/
+    │       └── dust3/                # PBRマップ
+    ├── shaders/
+    │   └── fog_of_war.gdshader       # 視界シェーダー
+    └── assets/
+        ├── characters/               # キャラクターモデル
+        └── maps/                     # マップ
 ```
 
 ### アーキテクチャ設計原則
