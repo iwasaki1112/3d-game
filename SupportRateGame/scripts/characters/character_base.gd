@@ -61,38 +61,27 @@ func _ready() -> void:
 func _setup_character() -> void:
 	var model = get_node_or_null("CharacterModel")
 	if model:
-		print("[%s] CharacterModel found" % name)
-
 		# マテリアルとテクスチャを設定
 		CharacterSetup.setup_materials(model, name)
 
-		# Yオフセットを適用
-		var meshes = CharacterSetup.find_meshes(model)
-		for mesh in meshes:
-			var y_offset = CharacterSetup.get_y_offset(mesh.name)
-			if y_offset != 0.0:
-				model.position.y = y_offset
-				print("[%s] Applied Y offset %.3f (from mesh '%s')" % [name, y_offset, mesh.name])
-				break
-
-		# Skeletonを取得（武器装着用）
+		# Skeletonを取得（武器装着用・Yオフセット計算用）
 		skeleton = CharacterSetup.find_skeleton(model)
 		if skeleton:
-			print("[%s] Skeleton found: %s" % [name, skeleton.name])
+			# Skeletonのレストポーズからfeet-to-hips距離を計算してYオフセットを適用
+			# キャラクターごとの体格差を吸収する
+			var model_scale: float = model.scale.y
+			var y_offset = CharacterSetup.calculate_y_offset_from_skeleton(skeleton, model_scale, name)
+			if y_offset > 0:
+				model.position.y = y_offset
 
-		# AnimationPlayerを取得
+		# AnimationPlayerを取得してアニメーションをロード
 		anim_player = CharacterSetup.find_animation_player(model)
 		if anim_player:
-			print("[%s] AnimationPlayer found" % name)
 			CharacterSetup.load_animations(anim_player, model, name)
 			# 初期アニメーションを再生
 			var idle_anim = CharacterSetup.get_animation_name("idle", current_weapon_type)
 			if anim_player.has_animation(idle_anim):
 				anim_player.play(idle_anim)
-		else:
-			print("[%s] NO AnimationPlayer!" % name)
-	else:
-		print("[%s] NO CharacterModel!" % name)
 
 
 func _physics_process(delta: float) -> void:
@@ -196,16 +185,11 @@ func move_to(target: Vector3, run: bool = false) -> void:
 
 ## 初期配置
 func _initial_placement() -> void:
-	print("[%s] _initial_placement started, pos=%s" % [name, global_position])
 	visible = false
-
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 	_snap_to_ground()
-	print("[%s] after snap, pos=%s" % [name, global_position])
-
 	visible = true
-	print("[%s] visible=true, final pos=%s" % [name, global_position])
 
 
 ## 地面にスナップ
@@ -221,6 +205,8 @@ func _snap_to_ground() -> void:
 	if result:
 		global_position = result.position
 		vertical_velocity = 0
+	else:
+		push_warning("[%s] snap_to_ground: no ground found at %s" % [name, global_position])
 
 
 ## アニメーション更新
@@ -300,7 +286,14 @@ func take_damage(amount: float) -> void:
 func _die() -> void:
 	is_alive = false
 	is_moving = false
+	play_dying_animation()
 	died.emit()
+
+
+## 死亡アニメーションを再生
+func play_dying_animation() -> void:
+	if anim_player and anim_player.has_animation("dying"):
+		anim_player.play("dying")
 
 
 ## 回復
@@ -323,23 +316,14 @@ func set_weapon_type(weapon_type: int) -> void:
 	if current_weapon_type == weapon_type:
 		return
 
-	var prev_weapon_type = current_weapon_type
 	current_weapon_type = weapon_type
 	weapon_type_changed.emit(weapon_type)
 
 	# 速度を更新
 	_update_speed_from_weapon()
 
-	# CharacterModelのY位置を調整（武器タイプによるアニメーション位置の差を補正）
-	var model = get_node_or_null("CharacterModel")
-	if model:
-		var prev_offset = CharacterSetup.WEAPON_Y_OFFSET.get(prev_weapon_type, 0.0)
-		var new_offset = CharacterSetup.WEAPON_Y_OFFSET.get(weapon_type, 0.0)
-		print("[%s] CharacterModel Y before: %.3f" % [name, model.position.y])
-		model.position.y += (new_offset - prev_offset)
-		print("[%s] CharacterModel Y after: %.3f (offset change: %.3f)" % [name, model.position.y, new_offset - prev_offset])
-
 	# アニメーションを即座に更新
+	# 注: 全アニメーションでHips Y位置が正規化されているため、Y位置調整は不要
 	_play_current_animation()
 
 	var weapon_name = CharacterSetup.WEAPON_TYPE_NAMES.get(weapon_type, "unknown")

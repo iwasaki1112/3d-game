@@ -25,6 +25,9 @@ var fog_of_war_manager: Node = null
 # 既存コードとの互換性のためプロパティを維持
 # 実際の値はMatchManagerまたはSquadManagerから取得
 
+# フォールバック状態（MatchManagerがない場合に使用）
+var _fallback_state: GameState = GameState.MENU
+
 var current_state: GameState:
 	get:
 		if match_manager:
@@ -35,7 +38,12 @@ var current_state: GameState:
 				2, 3: return GameState.PLAYING  # STRATEGY_PHASE, EXECUTION_PHASE
 				4: return GameState.ROUND_END
 				5: return GameState.GAME_OVER
-		return GameState.MENU
+		return _fallback_state
+	set(value):
+		# 注意: MatchManagerが存在する場合、getterはMatchManagerの状態を返すため
+		# このsetterで設定した値は無視されます。
+		# このsetterはMatchManagerがないテストシーン用のフォールバックです。
+		_fallback_state = value
 
 var current_round: int:
 	get: return match_manager.current_round if match_manager else 0

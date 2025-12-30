@@ -84,18 +84,25 @@ const ANIMATION_FILES := {
 	}
 }
 
+## 共通アニメーション（全武器タイプで共有）
+## 構造: { "anim_name": { "path": path, "loop": bool, "normalize_mode": string } }
+## normalize_mode:
+##   "full" - Hips Y を完全に0に固定（locomotion用）
+##   "relative" - Hips Y の開始位置を0に合わせ、相対的な動きを維持（dying等）
+##   "none" - 正規化なし
+const COMMON_ANIMATIONS := {
+	"dying": {
+		"path": "res://assets/characters/animations/dying.fbx",
+		"loop": false,
+		"normalize_mode": "relative"
+	}
+}
+
 ## 武器タイプ名称
 const WEAPON_TYPE_NAMES := {
 	WeaponType.NONE: "none",
 	WeaponType.RIFLE: "rifle",
 	WeaponType.PISTOL: "pistol"
-}
-
-## 武器タイプ別のY位置調整（アニメーションのHips位置の差を補正）
-const WEAPON_Y_OFFSET := {
-	WeaponType.NONE: 0.0,
-	WeaponType.RIFLE: 0.0,
-	WeaponType.PISTOL: 0.0
 }
 
 ## 武器タイプ別の速度倍率（None > Pistol > Rifle の順で速い）
@@ -105,21 +112,71 @@ const WEAPON_SPEED_MODIFIER := {
 	WeaponType.RIFLE: 0.75
 }
 
-## キャラクター別のY位置オフセット（足の位置を地面に合わせるため）
-## スケール2の場合の値。toe base bone Y=0になるよう計算。
-const CHARACTER_Y_OFFSET := {
-	"leet": -1.14,  # toe base local Y(0.57) * scale(2) = 1.14
-	"gsg9": -1.23,  # toe base local Y(0.616) * scale(2) = 1.23
-}
+## アニメーションのHips Y位置の目標値（全武器タイプで統一）
+## この値にHips Yを正規化することで、武器タイプ切替時の位置ズレを防ぐ
+const ANIMATION_HIPS_TARGET_Y: float = 0.0
+
+## Skeletonのレストポーズからfeet-to-hips距離を計算してYオフセットを算出
+## アニメーションでHips Yを0に正規化した場合、
+## feet_to_hips距離分だけモデルを上にオフセットすることで足が地面に接地する
+##
+## 計算式: y_offset = character_feet_to_hips × scale
+##
+## 注意: 現在はidle/walk/runのみ対応。ジャンプ/しゃがみ等の上下動アニメーションは
+## Hips固定方式では対応できないため、別途対応が必要
+##
+## @param skeleton: キャラクターのSkeleton3D
+## @param model_scale: モデルのスケール（通常は2.0）
+## @param debug_name: デバッグ用キャラクター名
+## @return: Y位置オフセット
+static func calculate_y_offset_from_skeleton(skeleton: Skeleton3D, model_scale: float = 2.0, debug_name: String = "") -> float:
+	if skeleton == null:
+		push_warning("[CharacterSetup] %s: Skeleton is null, cannot calculate Y offset" % debug_name)
+		return 0.0
+
+	# Hipsボーンを探す（Mixamo各種表記に対応）
+	var hips_idx := _find_bone_by_name(skeleton, [
+		"mixamorig_Hips", "mixamorig1_Hips", "mixamorig:Hips", "Hips"
+	])
+	if hips_idx == -1:
+		push_warning("[CharacterSetup] %s: Hips bone not found, Y offset will be 0" % debug_name)
+		return 0.0
+
+	# ToeBaseボーンを探す（左右どちらでもOK、各種表記に対応）
+	var toe_idx := _find_bone_by_name(skeleton, [
+		"mixamorig_LeftToeBase", "mixamorig1_LeftToeBase", "mixamorig:LeftToeBase", "LeftToeBase",
+		"mixamorig_RightToeBase", "mixamorig1_RightToeBase", "mixamorig:RightToeBase", "RightToeBase"
+	])
+	if toe_idx == -1:
+		push_warning("[CharacterSetup] %s: ToeBase bone not found, Y offset will be 0" % debug_name)
+		return 0.0
+
+	# レストポーズのグローバル位置を取得
+	var hips_rest: Transform3D = skeleton.get_bone_global_rest(hips_idx)
+	var toe_rest: Transform3D = skeleton.get_bone_global_rest(toe_idx)
+
+	# キャラクター固有のfeet-to-hips距離
+	var character_feet_to_hips := hips_rest.origin.y - toe_rest.origin.y
+
+	# アニメーションでHips Yを0に正規化した場合、
+	# feet_to_hips距離分だけモデルを上にオフセットすることで足が地面に接地する
+	var y_offset := character_feet_to_hips * model_scale
+
+	if debug_name:
+		print("[CharacterSetup] %s: Y offset: feet_to_hips=%.3f, scale=%.1f, total=%.3f" % [
+			debug_name, character_feet_to_hips, model_scale, y_offset
+		])
+
+	return y_offset
 
 
-## キャラクター名からYオフセットを取得
-static func get_y_offset(character_name: String) -> float:
-	var key = character_name.to_lower()
-	for k in CHARACTER_Y_OFFSET.keys():
-		if k in key:
-			return CHARACTER_Y_OFFSET[k]
-	return 0.0
+## ボーン名リストから最初に見つかったボーンのインデックスを返す
+static func _find_bone_by_name(skeleton: Skeleton3D, bone_names: Array) -> int:
+	for bone_name in bone_names:
+		var idx := skeleton.find_bone(bone_name)
+		if idx != -1:
+			return idx
+	return -1
 
 
 ## モデルにテクスチャとマテリアルを適用
@@ -190,27 +247,25 @@ static func _apply_textures_to_mesh(mesh_instance: MeshInstance3D, debug_name: S
 		print("[CharacterSetup] %s: Applied texture to mesh '%s'" % [debug_name, mesh_instance.name])
 
 
-## AnimationPlayerにアニメーションを読み込む（全武器タイプ）
-static func load_animations(anim_player: AnimationPlayer, model: Node, debug_name: String = "") -> void:
+## AnimationPlayerにアニメーションを読み込む（全武器タイプ + 共通）
+static func load_animations(anim_player: AnimationPlayer, model: Node, _debug_name: String = "") -> void:
 	var lib = anim_player.get_animation_library("")
 	if lib == null:
-		if debug_name:
-			print("[CharacterSetup] %s: No animation library found!" % debug_name)
 		return
 
-	if debug_name:
-		print("[CharacterSetup] %s: Loading animations..." % debug_name)
-
-	# 全武器タイプのアニメーションを読み込み
+	# 全武器タイプのアニメーションを読み込み（Hips Y完全正規化）
 	for weapon_type in ANIMATION_FILES.keys():
 		var weapon_name = WEAPON_TYPE_NAMES[weapon_type]
 		var anims = ANIMATION_FILES[weapon_type]
 		for anim_name in anims.keys():
 			var full_anim_name = "%s_%s" % [anim_name, weapon_name]  # 例: idle_none, walking_rifle
-			_load_animation_from_fbx(lib, anims[anim_name], full_anim_name, model, debug_name)
+			_load_animation_from_fbx(lib, anims[anim_name], full_anim_name, model, true, "full")
 
-	if debug_name:
-		print("[CharacterSetup] %s: Available animations: %s" % [debug_name, anim_player.get_animation_list()])
+	# 共通アニメーションを読み込み
+	for anim_name in COMMON_ANIMATIONS.keys():
+		var anim_data = COMMON_ANIMATIONS[anim_name]
+		var normalize_mode = anim_data.get("normalize_mode", "none")
+		_load_animation_from_fbx(lib, anim_data.path, anim_name, model, anim_data.loop, normalize_mode)
 
 
 ## 指定した武器タイプのアニメーション名を取得
@@ -226,25 +281,19 @@ static func has_weapon_animations(anim_player: AnimationPlayer, weapon_type: int
 
 
 ## FBXファイルからアニメーションを読み込む
-static func _load_animation_from_fbx(lib: AnimationLibrary, path: String, anim_name: String, model: Node, debug_name: String) -> void:
-	# ファイルが存在するか確認（エラー抑制のため）
+## @param lib: アニメーションライブラリ
+## @param path: FBXファイルパス
+## @param anim_name: 登録するアニメーション名
+## @param model: モデルノード（パス調整用）
+## @param loop: ループするか（デフォルト: true）
+## @param normalize_mode: Hips Y正規化モード ("full", "relative", "none")
+static func _load_animation_from_fbx(lib: AnimationLibrary, path: String, anim_name: String, model: Node, loop: bool = true, normalize_mode: String = "full") -> void:
 	if not ResourceLoader.exists(path):
 		return
 
 	var scene = load(path)
 	if scene == null:
-		if debug_name:
-			print("[CharacterSetup] %s: Failed to load %s" % [debug_name, path])
 		return
-
-	# rifle/pistolアニメーションはHips位置トラックのX,Z座標を0に固定（移動防止）
-	# Y座標オフセット: rifle=0.62, pistol=0.1 (NONEと高さを合わせるため)
-	var is_rifle = anim_name.ends_with("_rifle")
-	var is_pistol = anim_name.ends_with("_pistol")
-	var fix_hips_position = is_rifle or is_pistol
-	if fix_hips_position and debug_name:
-		var offset_info = "rifle:0.62" if is_rifle else ("pistol:0.1" if is_pistol else "none")
-		print("[CharacterSetup] %s: Will fix Hips position XZ for %s (Y offset: %s)" % [debug_name, anim_name, offset_info])
 
 	var instance = scene.instantiate()
 	var scene_anim_player = instance.get_node_or_null("AnimationPlayer")
@@ -253,18 +302,21 @@ static func _load_animation_from_fbx(lib: AnimationLibrary, path: String, anim_n
 			var anim = scene_anim_player.get_animation(anim_name_in_lib)
 			if anim:
 				var anim_copy = anim.duplicate()
-				anim_copy.loop_mode = Animation.LOOP_LINEAR
-				_adjust_animation_paths(anim_copy, model, fix_hips_position, is_rifle, is_pistol)
+				anim_copy.loop_mode = Animation.LOOP_LINEAR if loop else Animation.LOOP_NONE
+				_adjust_animation_paths(anim_copy, model, normalize_mode)
 				lib.add_animation(anim_name, anim_copy)
 				break
-	else:
-		if debug_name:
-			print("[CharacterSetup] %s: No AnimationPlayer in %s" % [debug_name, path])
 	instance.queue_free()
 
 
 ## アニメーションのトラックパスをモデル階層に合わせて調整
-static func _adjust_animation_paths(anim: Animation, model: Node, fix_hips_position: bool = false, is_rifle: bool = false, is_pistol: bool = false) -> void:
+## @param anim: アニメーション
+## @param model: モデルノード
+## @param normalize_mode: Hips Y正規化モード
+##   "full" - X,Z=0, Y=目標値に完全固定（locomotion用）
+##   "relative" - 開始位置を目標値に合わせ、相対的な動きを維持（dying等）
+##   "none" - 正規化なし
+static func _adjust_animation_paths(anim: Animation, model: Node, normalize_mode: String = "full") -> void:
 	if model == null:
 		return
 
@@ -274,31 +326,20 @@ static func _adjust_animation_paths(anim: Animation, model: Node, fix_hips_posit
 	# Hips位置トラックを修正するためのリスト
 	var hips_position_tracks: Array[int] = []
 
-	# デバッグ: 全トラックを確認
-	if fix_hips_position:
-		print("[CharacterSetup] Checking %d tracks for Hips position fix" % anim.get_track_count())
-
 	# トラックパスを調整
 	for i in range(anim.get_track_count()):
 		var track_path = anim.track_get_path(i)
 		var path_str = str(track_path)
 		var track_type = anim.track_get_type(i)
 
-		# デバッグ: Hips位置トラック情報（全アニメーション）
-		if "Hips" in path_str and track_type == Animation.TYPE_POSITION_3D:
-			var key_count = anim.track_get_key_count(i)
-			if key_count > 0:
-				var first_pos: Vector3 = anim.track_get_key_value(i, 0)
-				print("[CharacterSetup] Hips position track found - Y: %.3f (fix=%s)" % [first_pos.y, fix_hips_position])
-
-		# ボーン名の違いを修正（アニメーションは"mixamorig1_"、キャラクターは"mixamorig_"）
+		# Mixamoボーン名を統一形式に変換
+		# mixamorig1_ / mixamorig: → mixamorig_（Godotインポート後の標準形式）
 		path_str = path_str.replace("mixamorig1_", "mixamorig_")
+		path_str = path_str.replace("mixamorig:", "mixamorig_")
 
-		# rifle/pistolの場合、Hips位置トラックのX,Z座標を0に固定（Y座標は保持）
-		if fix_hips_position and "Hips" in path_str:
-			if track_type == Animation.TYPE_POSITION_3D:
-				print("[CharacterSetup] Marking track %d for XZ fix: %s" % [i, path_str])
-				hips_position_tracks.append(i)
+		# Hips位置トラックをマーク（正規化が必要な場合）
+		if normalize_mode != "none" and "Hips" in path_str and track_type == Animation.TYPE_POSITION_3D:
+			hips_position_tracks.append(i)
 
 		# Armatureノードがある場合のみプレフィックスを追加
 		if has_armature and path_str.begins_with("Skeleton3D:"):
@@ -306,30 +347,26 @@ static func _adjust_animation_paths(anim: Animation, model: Node, fix_hips_posit
 
 		anim.track_set_path(i, NodePath(path_str))
 
-	# Hips位置トラックを修正：X,Z座標を0に固定
-	# Y座標オフセット: rifle=0.62, pistol=0.1 (NONEと高さを合わせるため)
-	const HIPS_Y_OFFSET_RIFLE: float = 0.62
-	const HIPS_Y_OFFSET_PISTOL: float = 0.1
-
-	# 適用するオフセットを決定
-	var y_offset: float = 0.0
-	if is_rifle:
-		y_offset = HIPS_Y_OFFSET_RIFLE
-	elif is_pistol:
-		y_offset = HIPS_Y_OFFSET_PISTOL
-
+	# Hips位置トラックを正規化
 	for track_idx in hips_position_tracks:
 		var key_count = anim.track_get_key_count(track_idx)
-		# 最初のキーのY座標を出力（デバッグ用）
-		if key_count > 0:
+		if key_count == 0:
+			continue
+
+		if normalize_mode == "full":
+			# 完全正規化: X,Z=0, Y=目標値に固定
+			for key_idx in range(key_count):
+				var normalized_pos = Vector3(0, ANIMATION_HIPS_TARGET_Y, 0)
+				anim.track_set_key_value(track_idx, key_idx, normalized_pos)
+
+		elif normalize_mode == "relative":
+			# 相対正規化: 開始位置を目標値に合わせ、相対的な動きを維持
 			var first_pos: Vector3 = anim.track_get_key_value(track_idx, 0)
-			print("[CharacterSetup] Hips Y before fix: %.3f, after fix: %.3f (offset: %.2f)" % [first_pos.y, first_pos.y + y_offset, y_offset])
-		for key_idx in range(key_count):
-			var pos: Vector3 = anim.track_get_key_value(track_idx, key_idx)
-			# X,Zを0に固定、Yは武器タイプに応じてオフセット加算
-			var y_value = pos.y + y_offset
-			var fixed_pos = Vector3(0, y_value, 0)
-			anim.track_set_key_value(track_idx, key_idx, fixed_pos)
+			var offset = Vector3(-first_pos.x, ANIMATION_HIPS_TARGET_Y - first_pos.y, -first_pos.z)
+			for key_idx in range(key_count):
+				var original_pos: Vector3 = anim.track_get_key_value(track_idx, key_idx)
+				var adjusted_pos = original_pos + offset
+				anim.track_set_key_value(track_idx, key_idx, adjusted_pos)
 
 
 ## モデルからSkeletonを探す
