@@ -98,6 +98,13 @@ const WEAPON_Y_OFFSET := {
 	WeaponType.PISTOL: 0.0
 }
 
+## 武器タイプ別の速度倍率（None > Pistol > Rifle の順で速い）
+const WEAPON_SPEED_MODIFIER := {
+	WeaponType.NONE: 1.0,
+	WeaponType.PISTOL: 0.9,
+	WeaponType.RIFLE: 0.75
+}
+
 ## キャラクター別のY位置オフセット（足の位置を地面に合わせるため）
 ## スケール2の場合の値。toe base bone Y=0になるよう計算。
 const CHARACTER_Y_OFFSET := {
