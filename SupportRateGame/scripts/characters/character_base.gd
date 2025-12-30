@@ -122,6 +122,10 @@ func _can_execute_movement() -> bool:
 
 ## パス追従移動
 func _handle_path_movement(delta: float) -> void:
+	# パスがあるが移動していない場合、移動を開始
+	if not is_moving and waypoints.size() > 0 and current_waypoint_index < waypoints.size():
+		is_moving = true
+
 	if is_moving and waypoints.size() > 0 and current_waypoint_index < waypoints.size():
 		var waypoint: Dictionary = waypoints[current_waypoint_index]
 		var target: Vector3 = waypoint.position
@@ -165,12 +169,12 @@ func _handle_terrain_follow(delta: float) -> void:
 	velocity.y = vertical_velocity
 
 
-## パスを設定して移動開始
+## パスを設定（移動は実行フェーズで開始）
 func set_path(new_waypoints: Array) -> void:
 	waypoints = new_waypoints
 	current_waypoint_index = 0
 	is_running = false
-	is_moving = waypoints.size() > 0
+	# 注: is_movingはここでは設定しない（実行フェーズで開始）
 
 
 ## 移動停止
