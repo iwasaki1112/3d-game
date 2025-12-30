@@ -26,18 +26,29 @@ SupportRateGame/
 │   └── enemy.tscn         # 敵シーン
 ├── scripts/
 │   ├── autoload/
-│   │   ├── game_manager.gd    # ゲーム管理（Autoload）- ラウンド・経済システム
-│   │   └── input_manager.gd   # 入力管理（Autoload）- タッチ/マウス入力統合
+│   │   ├── game_events.gd     # イベントバス（Autoload）- システム間連携
+│   │   ├── game_manager.gd    # ゲーム管理（Autoload）- シーン遷移・設定のみ
+│   │   ├── input_manager.gd   # 入力管理（Autoload）- タッチ/マウス入力統合
+│   │   └── squad_manager.gd   # 分隊管理（Autoload）- 5人のプレイヤー管理
 │   ├── characters/
 │   │   ├── character_base.gd  # キャラクター基底クラス（移動・アニメーション）
 │   │   ├── player.gd          # プレイヤークラス
 │   │   └── enemy.gd           # 敵クラス（AI）
 │   ├── systems/
-│   │   ├── camera_controller.gd  # カメラ制御（ズーム・パン・追従）
-│   │   └── path/
-│   │       ├── path_manager.gd   # パス管理
-│   │       ├── path_renderer.gd  # パス描画（3Dメッシュ）
-│   │       └── path_analyzer.gd  # パス解析（直線判定・走り/歩き）
+│   │   ├── match_manager.gd      # マッチ管理（シーン内）- ラウンド・経済・勝敗
+│   │   ├── camera_controller.gd  # カメラ制御（ズーム・パン）
+│   │   ├── path/
+│   │   │   ├── path_manager.gd   # パス管理
+│   │   │   ├── path_renderer.gd  # パス描画（3Dメッシュ）
+│   │   │   └── path_analyzer.gd  # パス解析（2D論理座標ベース）
+│   │   └── vision/
+│   │       ├── fog_of_war_manager.gd   # 視界管理（Autoload）
+│   │       ├── fog_of_war_renderer.gd  # Fog描画
+│   │       └── vision_component.gd     # 視野コンポーネント
+│   ├── resources/
+│   │   └── economy_rules.gd   # 経済ルール（Resource）
+│   ├── data/
+│   │   └── player_data.gd     # プレイヤーデータ（RefCounted）
 │   ├── utils/
 │   │   └── character_setup.gd # キャラクター設定ユーティリティ
 │   ├── game_scene.gd      # ゲームシーン管理
@@ -56,9 +67,47 @@ SupportRateGame/
 
 ## アーキテクチャ
 
+### 設計原則
+1. **Autoloadは薄く**: シーン遷移・設定・イベントバスに限定
+2. **イベント駆動**: システム間はGameEventsを介して疎結合に連携
+3. **シーン内ノード**: ラウンド/経済などのゲームロジックはシーン内に配置
+4. **2D論理座標**: パスは2D（Vector2）で管理し、表示時に3Dに投影
+
 ### Autoload（シングルトン）
-- **GameManager**: ゲーム状態、ラウンド、経済システム管理
+- **GameEvents**: イベントバス - システム間の疎結合連携
+- **GameManager**: シーン遷移、設定、後方互換性インターフェース
 - **InputManager**: 全入力を一元管理、シグナルで各システムに通知
+- **SquadManager**: 5人の分隊管理、選択・経済・装備
+- **FogOfWarManager**: 視界システム管理
+
+### シーン内ノード（game.tscn）
+- **MatchManager**: ラウンド/経済/勝敗（GameEventsと連携）
+- **PathManager**: パス描画管理
+- **CameraController**: カメラ制御
+- **FogOfWarRenderer**: Fog描画
+
+### イベントバス（GameEvents）
+systems同士が直接呼び合う代わりにGameEventsを介して連携：
+```gdscript
+# ユニット関連
+signal unit_spotted(observer, target)
+signal unit_killed(killer, victim, weapon_id)
+signal unit_damaged(target, damage, attacker)
+
+# ラウンド関連
+signal round_started(round_number)
+signal round_ended(winner_team)
+signal buy_phase_started()
+signal play_phase_started()
+
+# 経済関連
+signal money_changed(player, new_amount)
+signal reward_granted(player, amount, reason)
+
+# 爆弾関連
+signal bomb_planted(site, planter)
+signal bomb_defused(defuser)
+```
 
 ### クラス階層
 ```
@@ -67,11 +116,9 @@ CharacterBase (character_base.gd)
 └── Enemy (enemy.gd) - AI敵キャラクター
 ```
 
-### システム
-- **CameraController**: カメラ制御（InputManagerからズーム/パン信号を受信）
-- **PathManager**: パス描画管理（InputManagerから描画信号を受信）
-  - PathRenderer: 3Dメッシュ描画
-  - PathAnalyzer: 直線判定、走り/歩き判定
+### リソース
+- **EconomyRules**: 経済パラメータを一元管理（勝敗/連敗ボーナス/キル報酬など）
+- **PlayerData**: プレイヤー個別データ（経済/装備/統計）
 
 ## 技術詳細
 
@@ -95,6 +142,11 @@ directional_shadow_blend_splits = true
 - パス追従移動（waypoints配列）
 - アニメーション: idle, walking, running（FBXから読み込み）
 - 敵はAIStateによる状態管理（IDLE, PATROL, CHASE, ATTACK, COVER）
+
+### パスシステム
+- **論理座標**: Vector2（XZ平面）で管理
+- **表示座標**: Vector3に投影して描画
+- PathAnalyzerで2D/3D変換ユーティリティ提供
 
 ### 入力操作
 - **1本指ドラッグ**: パス描画（移動指示）

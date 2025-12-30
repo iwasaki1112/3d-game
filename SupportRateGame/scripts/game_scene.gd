@@ -3,10 +3,12 @@ extends Node3D
 ## ゲームシーンのメイン管理
 ## 各システムの初期化と接続を担当
 ## プレイヤー管理はSquadManagerに委譲
+## ラウンド/経済はMatchManagerに委譲
 
 const PathManager = preload("res://scripts/systems/path/path_manager.gd")
 const CameraController = preload("res://scripts/systems/camera_controller.gd")
 const FogOfWarRendererScript = preload("res://scripts/systems/vision/fog_of_war_renderer.gd")
+const MatchManagerScript = preload("res://scripts/systems/match_manager.gd")
 
 @onready var players_node: Node3D = $Players
 @onready var enemies_node: Node3D = $Enemies
@@ -21,6 +23,7 @@ const SELECTION_RADIUS: float = 1.5  # プレイヤー選択の判定半径
 var path_manager: Node3D = null
 var camera_controller: Node3D = null
 var fog_renderer: Node3D = null
+var match_manager: Node = null
 
 
 func _ready() -> void:
@@ -50,6 +53,7 @@ func _ready() -> void:
 	_create_selection_indicator()
 
 	# システムを初期化
+	_setup_match_manager()
 	_setup_path_system()
 	_setup_camera_system()
 	_setup_fog_of_war()
@@ -75,6 +79,7 @@ func _on_squad_player_selected(player_data: RefCounted, _index: int) -> void:
 
 func _exit_tree() -> void:
 	# シーン終了時にクリーンアップ
+	GameManager.unregister_match_manager()
 	GameManager.stop_game()
 	GameManager.enemies.clear()
 
@@ -142,6 +147,19 @@ func _find_and_select_player_at_position(world_pos: Vector3) -> bool:
 		return true
 
 	return false
+
+
+## MatchManagerをセットアップ
+func _setup_match_manager() -> void:
+	match_manager = Node.new()
+	match_manager.name = "MatchManager"
+	match_manager.set_script(MatchManagerScript)
+	add_child(match_manager)
+
+	# GameManagerに登録
+	GameManager.register_match_manager(match_manager)
+
+	print("[GameScene] MatchManager initialized")
 
 
 ## パスシステムをセットアップ
