@@ -185,6 +185,59 @@ func _catmull_rom_3d(p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, t: floa
 	)
 
 
+# === パス長計算 ===
+
+## パスの総距離を計算（Vector2版）
+static func calculate_path_length_2d(path: Array[Vector2]) -> float:
+	if path.size() < 2:
+		return 0.0
+
+	var total_length := 0.0
+	for i in range(path.size() - 1):
+		total_length += path[i].distance_to(path[i + 1])
+
+	return total_length
+
+
+## パスの総距離を計算（Vector3版）
+static func calculate_path_length(path: Array[Vector3]) -> float:
+	if path.size() < 2:
+		return 0.0
+
+	var total_length := 0.0
+	for i in range(path.size() - 1):
+		var p1 := path[i]
+		var p2 := path[i + 1]
+		# XZ平面での距離を計算（Y軸は無視）
+		var dist := Vector2(p1.x, p1.z).distance_to(Vector2(p2.x, p2.z))
+		total_length += dist
+
+	return total_length
+
+
+## run_flagsを考慮した移動時間を計算
+## 戻り値: パスを移動するのに必要な時間（秒）
+static func calculate_path_time(path: Array[Vector3], run_flags: Array[bool], walk_speed: float, run_speed: float) -> float:
+	if path.size() < 2:
+		return 0.0
+
+	var total_time := 0.0
+	for i in range(path.size() - 1):
+		var p1 := path[i]
+		var p2 := path[i + 1]
+		var dist := Vector2(p1.x, p1.z).distance_to(Vector2(p2.x, p2.z))
+
+		var is_running := false
+		if i < run_flags.size():
+			is_running = run_flags[i]
+
+		var speed := run_speed if is_running else walk_speed
+		if speed > 0:
+			total_time += dist / speed
+
+	return total_time
+
+
 # === 座標変換ユーティリティ ===
 
 ## Vector3配列をVector2配列に変換（XZ平面）

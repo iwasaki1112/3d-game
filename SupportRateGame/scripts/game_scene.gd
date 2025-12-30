@@ -214,6 +214,10 @@ func _setup_path_system() -> void:
 	path_manager.path_confirmed.connect(_on_path_confirmed)
 	path_manager.path_cleared.connect(_on_path_cleared)
 
+	# GameUIにPathManagerを接続
+	if game_ui and game_ui.has_method("connect_path_manager"):
+		game_ui.connect_path_manager(path_manager)
+
 	# InputManagerのdraw_startedを自前で処理（プレイヤー選択のため）
 	if has_node("/root/InputManager"):
 		var input_manager = get_node("/root/InputManager")

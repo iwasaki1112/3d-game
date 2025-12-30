@@ -9,8 +9,13 @@ const PathAnalyzerClass = preload("res://scripts/systems/path/path_analyzer.gd")
 
 signal path_confirmed(waypoints: Array)  # Array of {position: Vector3, run: bool}
 signal path_cleared
+signal path_time_changed(current_time: float, max_time: float)  # UI通知用
 
 @export var min_point_distance: float = 0.5  # ウェイポイント間の最小距離
+
+# パス長制限
+var max_path_time: float = 10.0  # デフォルト値（execution_timeから取得）
+var current_path_time: float = 0.0
 
 # 内部状態（現在選択中のプレイヤー用）
 var current_path: Array[Vector3] = []
@@ -42,6 +47,18 @@ func _ready() -> void:
 		var events = get_node("/root/GameEvents")
 		events.round_started.connect(_on_round_started)
 		events.strategy_phase_started.connect(_on_strategy_phase_started)
+		events.execution_phase_started.connect(_on_execution_phase_started)
+
+	# execution_timeを取得
+	_update_max_path_time()
+
+
+## 最大パス時間を更新（MatchManagerから取得）
+func _update_max_path_time() -> void:
+	if GameManager and GameManager.match_manager:
+		var mm = GameManager.match_manager
+		if mm.economy_rules:
+			max_path_time = mm.economy_rules.execution_time
 
 
 ## ラウンド開始時に全パスをクリア
@@ -52,6 +69,12 @@ func _on_round_started(_round_number: int) -> void:
 ## 戦略フェーズ開始時に全パスをクリア（前ターンのパスを消す）
 func _on_strategy_phase_started(_turn_number: int) -> void:
 	clear_all_paths()
+
+
+## 実行フェーズ開始時に描画中なら強制終了（確定）
+func _on_execution_phase_started(_turn_number: int) -> void:
+	if is_drawing:
+		_on_draw_ended(Vector2.ZERO)
 
 
 ## 描画開始
@@ -69,6 +92,7 @@ func _on_draw_started(_screen_pos: Vector2, world_pos: Vector3) -> void:
 	is_drawing = true
 	current_path.clear()
 	run_flags.clear()
+	current_path_time = 0.0
 
 	# プレイヤーを停止
 	if player and player.has_method("stop"):
@@ -82,6 +106,7 @@ func _on_draw_started(_screen_pos: Vector2, world_pos: Vector3) -> void:
 
 	current_path.append(world_pos)
 	_update_visual()
+	_update_path_time()
 
 
 ## 描画中
@@ -95,8 +120,14 @@ func _on_draw_moved(_screen_pos: Vector2, world_pos: Vector3) -> void:
 		if distance < min_point_distance:
 			return
 
+	# パス時間制限チェック
+	if _would_exceed_time_limit(world_pos):
+		# 制限に達している場合は追加しない
+		return
+
 	current_path.append(world_pos)
 	_update_visual()
+	_update_path_time()
 
 
 ## 描画終了
@@ -289,3 +320,57 @@ func get_player_path(p: Node3D) -> Dictionary:
 ## プレイヤーにパスが設定されているか
 func has_player_path(p: Node3D) -> bool:
 	return player_paths.has(p) and player_paths[p]["path"].size() >= 2
+
+
+## プレイヤーの速度を取得
+func _get_player_speeds() -> Dictionary:
+	var walk_speed := 3.0  # デフォルト値
+	var run_speed := 6.0   # デフォルト値
+
+	if player:
+		if "walk_speed" in player:
+			walk_speed = player.walk_speed
+		if "run_speed" in player:
+			run_speed = player.run_speed
+
+	return {"walk": walk_speed, "run": run_speed}
+
+
+## パス時間を更新してシグナルを発行
+func _update_path_time() -> void:
+	var speeds := _get_player_speeds()
+	current_path_time = PathAnalyzerClass.calculate_path_time(
+		current_path, run_flags, speeds["walk"], speeds["run"]
+	)
+	path_time_changed.emit(current_path_time, max_path_time)
+
+
+## 新しい点を追加したら時間制限を超えるかチェック
+func _would_exceed_time_limit(new_pos: Vector3) -> bool:
+	if current_path.size() == 0:
+		return false
+
+	var speeds := _get_player_speeds()
+
+	# 仮のパスを作成して時間を計算
+	var test_path: Array[Vector3] = current_path.duplicate()
+	test_path.append(new_pos)
+
+	# 仮のrun_flagsを作成（解析して走り判定）
+	var test_flags: Array[bool] = analyzer.analyze(test_path)
+
+	var test_time: float = PathAnalyzerClass.calculate_path_time(
+		test_path, test_flags, speeds["walk"], speeds["run"]
+	)
+
+	return test_time > max_path_time
+
+
+## 残り時間を取得
+func get_remaining_time() -> float:
+	return max(0.0, max_path_time - current_path_time)
+
+
+## 最大パス時間を取得
+func get_max_path_time() -> float:
+	return max_path_time
