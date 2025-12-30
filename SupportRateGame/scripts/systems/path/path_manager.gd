@@ -47,6 +47,7 @@ func _ready() -> void:
 		var events = get_node("/root/GameEvents")
 		events.round_started.connect(_on_round_started)
 		events.strategy_phase_started.connect(_on_strategy_phase_started)
+		events.execution_phase_started.connect(_on_execution_phase_started)
 
 	# execution_timeを取得
 	_update_max_path_time()
@@ -68,6 +69,12 @@ func _on_round_started(_round_number: int) -> void:
 ## 戦略フェーズ開始時に全パスをクリア（前ターンのパスを消す）
 func _on_strategy_phase_started(_turn_number: int) -> void:
 	clear_all_paths()
+
+
+## 実行フェーズ開始時に描画中なら強制終了（確定）
+func _on_execution_phase_started(_turn_number: int) -> void:
+	if is_drawing:
+		_on_draw_ended(Vector2.ZERO)
 
 
 ## 描画開始
@@ -350,9 +357,9 @@ func _would_exceed_time_limit(new_pos: Vector3) -> bool:
 	test_path.append(new_pos)
 
 	# 仮のrun_flagsを作成（解析して走り判定）
-	var test_flags := analyzer.analyze(test_path)
+	var test_flags: Array[bool] = analyzer.analyze(test_path)
 
-	var test_time := PathAnalyzerClass.calculate_path_time(
+	var test_time: float = PathAnalyzerClass.calculate_path_time(
 		test_path, test_flags, speeds["walk"], speeds["run"]
 	)
 
