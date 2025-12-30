@@ -7,6 +7,7 @@ Godot MCPを優先的に使用してGodotを操作する。Godot MCPで対応で
 - **エンジン**: Godot 4.5.1
 - **プロジェクトパス**: `SupportRateGame/`
 - **言語**: GDScript
+- **設計ドキュメント**: `docs/GAME_DESIGN.md` - ゲーム設計の詳細
 
 ## ゲーム概要
 タクティカルシューター（CS1.6 + Door Kickers 2スタイル）
