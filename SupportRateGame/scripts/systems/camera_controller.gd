@@ -1,24 +1,22 @@
 extends Node3D
 
 ## カメラコントローラー
-## ズーム、パン、ターゲット追従を管理
+## ズーム、パン操作を管理（自動追従なし）
 
 @export_group("カメラ設定")
 @export var camera_distance: float = 15.0
 @export var camera_angle: float = -60.0  # 斜めアングル（度）
 @export var min_zoom: float = 4.0
 @export var max_zoom: float = 25.0
-@export var pan_scale: float = 0.002  # パン感度
-
-@export_group("追従設定")
-@export var follow_target: Node3D = null
+@export var pan_scale: float = 0.002  # パン感度（タッチ用）
+@export var keyboard_pan_speed: float = 20.0  # キーボードパン速度
 
 # カメラ参照
 var camera: Camera3D = null
 
 # 内部状態
 var target_zoom: float = 5.0
-var camera_offset: Vector3 = Vector3.ZERO  # パンオフセット
+var camera_position: Vector3 = Vector3.ZERO  # カメラ注視点のワールド座標
 
 
 func _ready() -> void:
@@ -36,30 +34,48 @@ func _ready() -> void:
 		input_manager.camera_pan.connect(_on_camera_pan)
 
 
-func _physics_process(_delta: float) -> void:
+func _physics_process(delta: float) -> void:
 	if camera == null:
 		return
 
+	_handle_keyboard_input(delta)
 	_update_camera()
+
+
+## キーボード入力でカメラパン（WASD）
+func _handle_keyboard_input(delta: float) -> void:
+	# プレイ中でない場合は入力を無視
+	if GameManager.current_state != GameManager.GameState.PLAYING:
+		return
+
+	var move_dir := Vector3.ZERO
+
+	if Input.is_action_pressed("move_forward"):
+		move_dir.z -= 1
+	if Input.is_action_pressed("move_backward"):
+		move_dir.z += 1
+	if Input.is_action_pressed("move_left"):
+		move_dir.x -= 1
+	if Input.is_action_pressed("move_right"):
+		move_dir.x += 1
+
+	if move_dir != Vector3.ZERO:
+		move_dir = move_dir.normalized()
+		camera_position += move_dir * keyboard_pan_speed * delta
 
 
 ## カメラ位置を更新
 func _update_camera() -> void:
-	# ターゲット位置を取得
-	var target_pos := Vector3.ZERO
-	if follow_target:
-		target_pos = follow_target.global_position
-
 	# 斜めからのトップダウンビュー
 	var elevation_rad := deg_to_rad(-camera_angle)
 	var cam_y := camera_distance * sin(elevation_rad)
 	var cam_z := camera_distance * cos(elevation_rad)
 
-	var camera_pos := target_pos + camera_offset + Vector3(0, cam_y, cam_z)
-	camera.global_position = camera_pos
+	var cam_pos := camera_position + Vector3(0, cam_y, cam_z)
+	camera.global_position = cam_pos
 
-	# ターゲットを見る
-	camera.look_at(target_pos + camera_offset + Vector3(0, 1, 0), Vector3.UP)
+	# 注視点を見る
+	camera.look_at(camera_position + Vector3(0, 1, 0), Vector3.UP)
 
 
 ## ズーム処理
@@ -68,30 +84,31 @@ func _on_camera_zoom(zoom_delta: float) -> void:
 	camera_distance = target_zoom
 
 
-## パン処理
+## パン処理（2本指ドラッグ）
 func _on_camera_pan(delta: Vector2) -> void:
 	var pan_factor := camera_distance * pan_scale
-	camera_offset.x -= delta.x * pan_factor
-	camera_offset.z -= delta.y * pan_factor
+	camera_position.x -= delta.x * pan_factor
+	camera_position.z -= delta.y * pan_factor
 
 
-## カメラを即座に配置（初期化用）
-func snap_to_target() -> void:
-	if camera == null or follow_target == null:
+## カメラを指定位置に即座に配置
+func snap_to_position(pos: Vector3) -> void:
+	if camera == null:
 		return
 
-	var target_pos := follow_target.global_position
-	var elevation_rad := deg_to_rad(-camera_angle)
-	var cam_y := camera_distance * sin(elevation_rad)
-	var cam_z := camera_distance * cos(elevation_rad)
-
-	camera.global_position = target_pos + camera_offset + Vector3(0, cam_y, cam_z)
-	camera.look_at(target_pos + camera_offset + Vector3(0, 1, 0), Vector3.UP)
+	camera_position = pos
+	_update_camera()
 
 
-## パンオフセットをリセット
-func reset_pan() -> void:
-	camera_offset = Vector3.ZERO
+## カメラを即座に配置（初期化用 - 後方互換）
+func snap_to_target() -> void:
+	# 初期位置は原点、または現在の位置をそのまま使用
+	_update_camera()
+
+
+## カメラ位置をリセット
+func reset_position(pos: Vector3 = Vector3.ZERO) -> void:
+	camera_position = pos
 
 
 ## ズームをリセット
@@ -103,9 +120,9 @@ func reset_zoom(new_zoom: float = -1) -> void:
 	camera_distance = target_zoom
 
 
-## 追従ターゲットを設定
-func set_follow_target(target: Node3D) -> void:
-	follow_target = target
+## 現在のカメラ注視点を取得
+func get_camera_position() -> Vector3:
+	return camera_position
 
 
 ## Camera3Dを取得
