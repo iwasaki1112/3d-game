@@ -19,6 +19,11 @@ extends CanvasLayer
 # デバッグ用
 var debug_label: Label = null
 
+# パス残り時間表示用
+var path_time_label: Label = null
+var path_time_bar: ProgressBar = null
+var path_time_container: Control = null
+
 
 func _ready() -> void:
 	# デバッグラベルを作成（右下）
@@ -36,6 +41,10 @@ func _ready() -> void:
 	debug_label.offset_right = -10
 	debug_label.offset_bottom = -10
 	add_child(debug_label)
+
+	# パス残り時間表示を作成（画面下部中央）
+	_create_path_time_ui()
+
 	game_over_panel.visible = false
 	shopping_panel.visible = false
 	restart_button.pressed.connect(_on_restart_button_pressed)
@@ -133,17 +142,6 @@ func _on_play_phase_started() -> void:
 	shopping_panel.visible = false
 
 
-## 戦略フェーズ開始
-func _on_strategy_phase_started(turn_number: int) -> void:
-	print("[GameUI] Strategy phase started (Turn %d)" % turn_number)
-	shopping_panel.visible = false
-
-
-## 実行フェーズ開始
-func _on_execution_phase_started(turn_number: int) -> void:
-	print("[GameUI] Execution phase started (Turn %d)" % turn_number)
-
-
 ## ゲームオーバー
 func _on_game_over(_winner_team: int) -> void:
 	print("[GameUI] Game over")
@@ -224,7 +222,99 @@ func _buy_weapon(weapon_id: int) -> void:
 func _update_weapon_button_texts() -> void:
 	var ak47_data = CharacterSetup.get_weapon_data(CharacterSetup.WeaponId.AK47)
 	var usp_data = CharacterSetup.get_weapon_data(CharacterSetup.WeaponId.USP)
-	
+
 	none_button.text = "None"
 	ak47_button.text = "AK-47 ($%d)" % ak47_data.price
 	pistol_button.text = "USP ($%d)" % usp_data.price
+
+
+## パス残り時間UI作成
+func _create_path_time_ui() -> void:
+	# コンテナ（画面下部中央）
+	path_time_container = Control.new()
+	path_time_container.anchors_preset = Control.PRESET_BOTTOM_WIDE
+	path_time_container.anchor_top = 1.0
+	path_time_container.anchor_bottom = 1.0
+	path_time_container.offset_top = -60
+	path_time_container.offset_bottom = -10
+	path_time_container.visible = false  # 初期状態は非表示
+	add_child(path_time_container)
+
+	# VBoxで縦に配置
+	var vbox := VBoxContainer.new()
+	vbox.anchors_preset = Control.PRESET_CENTER_BOTTOM
+	vbox.anchor_left = 0.5
+	vbox.anchor_right = 0.5
+	vbox.anchor_top = 0.0
+	vbox.anchor_bottom = 1.0
+	vbox.offset_left = -100
+	vbox.offset_right = 100
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	path_time_container.add_child(vbox)
+
+	# プログレスバー
+	path_time_bar = ProgressBar.new()
+	path_time_bar.custom_minimum_size = Vector2(200, 20)
+	path_time_bar.max_value = 10.0
+	path_time_bar.value = 10.0
+	path_time_bar.show_percentage = false
+	vbox.add_child(path_time_bar)
+
+	# ラベル
+	path_time_label = Label.new()
+	path_time_label.add_theme_font_size_override("font_size", 14)
+	path_time_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	path_time_label.text = "残り: 10.0秒"
+	vbox.add_child(path_time_label)
+
+
+## PathManagerに接続
+func connect_path_manager(path_manager: Node) -> void:
+	if path_manager.has_signal("path_time_changed"):
+		path_manager.path_time_changed.connect(_on_path_time_changed)
+
+
+## パス時間変更時
+func _on_path_time_changed(current_time: float, max_time: float) -> void:
+	if path_time_container == null:
+		return
+
+	var remaining := max_time - current_time
+
+	# プログレスバーを更新
+	path_time_bar.max_value = max_time
+	path_time_bar.value = remaining
+
+	# ラベルを更新
+	path_time_label.text = "残り: %.1f秒" % remaining
+
+	# 残り少なくなったら色を変更
+	if remaining < max_time * 0.2:
+		path_time_bar.modulate = Color.RED
+	elif remaining < max_time * 0.5:
+		path_time_bar.modulate = Color.YELLOW
+	else:
+		path_time_bar.modulate = Color.WHITE
+
+
+## 戦略フェーズ開始
+func _on_strategy_phase_started(turn_number: int) -> void:
+	print("[GameUI] Strategy phase started (Turn %d)" % turn_number)
+	shopping_panel.visible = false
+	# パス時間UIを表示
+	if path_time_container:
+		path_time_container.visible = true
+		# リセット
+		if path_time_bar:
+			path_time_bar.value = path_time_bar.max_value
+			path_time_bar.modulate = Color.WHITE
+		if path_time_label:
+			path_time_label.text = "残り: %.1f秒" % path_time_bar.max_value
+
+
+## 実行フェーズ開始
+func _on_execution_phase_started(turn_number: int) -> void:
+	print("[GameUI] Execution phase started (Turn %d)" % turn_number)
+	# パス時間UIを非表示
+	if path_time_container:
+		path_time_container.visible = false
