@@ -220,6 +220,11 @@ func _setup_path_system() -> void:
 		# PathManagerより先にこのシーンでdraw_startedを処理
 		input_manager.draw_started.connect(_on_draw_started_for_selection, CONNECT_REFERENCE_COUNTED)
 
+	# 実行フェーズ開始時に全プレイヤーのパスを適用
+	if has_node("/root/GameEvents"):
+		var events = get_node("/root/GameEvents")
+		events.execution_phase_started.connect(_on_execution_phase_started)
+
 
 ## カメラシステムをセットアップ
 func _setup_camera_system() -> void:
@@ -286,13 +291,44 @@ func _on_draw_started_for_selection(_screen_pos: Vector2, world_pos: Vector3) ->
 	_find_and_select_player_at_position(world_pos)
 
 
-## パス確定時のコールバック
-func _on_path_confirmed(waypoints: Array) -> void:
-	var selected_player = squad_manager.get_selected_player_node() if squad_manager else null
-	if selected_player and selected_player.has_method("set_path"):
-		selected_player.set_path(waypoints)
+## パス確定時のコールバック（戦略フェーズ中はパスを保存するのみ）
+func _on_path_confirmed(_waypoints: Array) -> void:
+	# パスはPathManagerに保存されている
+	# 実行フェーズ開始時に全プレイヤーに適用される
+	pass
 
 
 ## パスクリア時のコールバック
 func _on_path_cleared() -> void:
 	pass
+
+
+## 実行フェーズ開始時のコールバック
+func _on_execution_phase_started(_turn_number: int) -> void:
+	if not path_manager or not squad_manager:
+		return
+
+	# 全プレイヤーのパスを適用
+	for data in squad_manager.squad:
+		if not data.is_alive or not data.player_node:
+			continue
+
+		var player_node = data.player_node
+		if path_manager.has_player_path(player_node):
+			var path_data = path_manager.get_player_path(player_node)
+			var waypoints: Array = []
+			var path: Array = path_data["path"]
+			var run_flags: Array = path_data["run_flags"]
+
+			for i in range(path.size()):
+				var run := false
+				if i > 0 and i - 1 < run_flags.size():
+					run = run_flags[i - 1]
+				waypoints.append({
+					"position": path[i],
+					"run": run
+				})
+
+			if player_node.has_method("set_path"):
+				player_node.set_path(waypoints)
+				print("[GameScene] Path applied to %s (%d waypoints)" % [player_node.name, waypoints.size()])

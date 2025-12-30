@@ -105,13 +105,27 @@ func _physics_process(delta: float) -> void:
 	if GameManager.current_state != GameManager.GameState.PLAYING:
 		return
 
-	_handle_path_movement(delta)
+	# 移動は実行フェーズのみ
+	if _can_execute_movement():
+		_handle_path_movement(delta)
+
 	_handle_terrain_follow(delta)
 	move_and_slide()
 
 
+## 移動実行が可能かどうか
+func _can_execute_movement() -> bool:
+	if GameManager and GameManager.match_manager:
+		return GameManager.match_manager.can_execute_movement()
+	return true  # MatchManagerがなければ許可
+
+
 ## パス追従移動
 func _handle_path_movement(delta: float) -> void:
+	# パスがあるが移動していない場合、移動を開始
+	if not is_moving and waypoints.size() > 0 and current_waypoint_index < waypoints.size():
+		is_moving = true
+
 	if is_moving and waypoints.size() > 0 and current_waypoint_index < waypoints.size():
 		var waypoint: Dictionary = waypoints[current_waypoint_index]
 		var target: Vector3 = waypoint.position
@@ -155,12 +169,12 @@ func _handle_terrain_follow(delta: float) -> void:
 	velocity.y = vertical_velocity
 
 
-## パスを設定して移動開始
+## パスを設定（移動は実行フェーズで開始）
 func set_path(new_waypoints: Array) -> void:
 	waypoints = new_waypoints
 	current_waypoint_index = 0
 	is_running = false
-	is_moving = waypoints.size() > 0
+	# 注: is_movingはここでは設定しない（実行フェーズで開始）
 
 
 ## 移動停止
