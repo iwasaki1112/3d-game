@@ -35,10 +35,8 @@ func _initialize_enemy_visibility() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
-	if not GameManager:
-		return
-
-	for enemy in GameManager.enemies:
+	# グループから敵を取得
+	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if enemy and is_instance_valid(enemy):
 			set_character_visible(enemy, false)
 			enemy_visibility[enemy] = false
@@ -93,10 +91,8 @@ func is_position_visible(pos: Vector3) -> bool:
 
 ## 敵の可視性を更新
 func _update_enemy_visibility() -> void:
-	if not GameManager:
-		return
-
-	for enemy in GameManager.enemies:
+	# グループから敵を取得
+	for enemy in get_tree().get_nodes_in_group("enemies"):
 		if not enemy or not is_instance_valid(enemy):
 			continue
 
@@ -134,11 +130,10 @@ func reset_visibility() -> void:
 	enemy_visibility.clear()
 	current_visible_points.clear()
 
-	# 全敵を非表示にする
-	if GameManager:
-		for enemy in GameManager.enemies:
-			if enemy and is_instance_valid(enemy):
-				set_character_visible(enemy, false)
+	# 全敵を非表示にする（グループから取得）
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		if enemy and is_instance_valid(enemy):
+			set_character_visible(enemy, false)
 
 	fog_updated.emit()
 

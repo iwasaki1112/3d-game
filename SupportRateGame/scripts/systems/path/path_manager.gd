@@ -175,6 +175,10 @@ func _save_player_path(p: Node3D, path: Array, flags: Array) -> void:
 			"renderer": renderer
 		}
 
+		# プレイヤーがシーンから削除されたらクリーンアップ
+		if not p.tree_exiting.is_connected(_on_player_tree_exiting):
+			p.tree_exiting.connect(_on_player_tree_exiting.bind(p))
+
 	player_paths[p]["path"] = path
 	player_paths[p]["run_flags"] = flags
 
@@ -237,6 +241,26 @@ func clear_all_paths() -> void:
 		player_paths[p]["run_flags"].clear()
 
 	path_cleared.emit()
+
+
+## プレイヤーがシーンから削除されたときのクリーンアップ
+func _on_player_tree_exiting(p: Node3D) -> void:
+	if not player_paths.has(p):
+		return
+
+	# レンダラーを削除
+	var renderer = player_paths[p]["renderer"]
+	if renderer and is_instance_valid(renderer):
+		renderer.queue_free()
+
+	# Dictionaryからエントリを削除
+	player_paths.erase(p)
+
+	# 現在のプレイヤーだったらクリア
+	if player == p:
+		player = null
+		current_path.clear()
+		run_flags.clear()
 
 
 ## プレイヤー参照を設定

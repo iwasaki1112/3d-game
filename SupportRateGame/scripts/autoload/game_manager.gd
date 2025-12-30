@@ -12,9 +12,6 @@ enum GameMode { DEFUSE, HOSTAGE }
 # ゲームモード
 var current_mode: GameMode = GameMode.DEFUSE
 
-# ゲームオブジェクト参照
-var enemies: Array[Node3D] = []
-
 # フラグ
 var is_game_running: bool = false
 
@@ -165,34 +162,31 @@ func start_playing() -> void:
 		match_manager.start_playing()
 
 
-## 武器購入（後方互換性、SquadManager経由）
+## 武器購入（後方互換性、SquadManagerに委譲）
+## 非推奨: SquadManager.buy_weapon_by_price()を直接使用してください
 func buy_weapon(price: int) -> bool:
-	if match_manager and not match_manager.is_buy_phase():
-		return false
-
-	var data = _get_selected_player_data()
-	if data and data.money >= price:
-		data.money -= price
-		return true
-
+	if squad_manager:
+		return squad_manager.buy_weapon_by_price(price)
 	return false
 
 
-## キル報酬（後方互換性、GameEvents経由が推奨）
+## キル報酬（後方互換性、GameEventsを直接使用）
+## 非推奨: GameEvents.unit_killed.emit()を直接使用してください
 func on_enemy_killed(weapon_id: int = 0) -> void:
 	var selected = squad_manager.get_selected_player_node() if squad_manager else null
 	if selected and has_node("/root/GameEvents"):
-		# enemyは不明なのでnullを渡す
 		get_node("/root/GameEvents").unit_killed.emit(selected, null, weapon_id)
 
 
-## キル報酬（キラー指定版、GameEvents経由が推奨）
+## キル報酬（キラー指定版）
+## 非推奨: GameEvents.unit_killed.emit()を直接使用してください
 func on_enemy_killed_by(killer: Node3D, weapon_id: int = 0) -> void:
 	if has_node("/root/GameEvents"):
 		get_node("/root/GameEvents").unit_killed.emit(killer, null, weapon_id)
 
 
-## 爆弾設置（GameEvents経由が推奨）
+## 爆弾設置
+## 非推奨: GameEvents.bomb_planted.emit()を直接使用してください
 func on_bomb_planted() -> void:
 	var selected = squad_manager.get_selected_player_node() if squad_manager else null
 	if has_node("/root/GameEvents"):
@@ -200,26 +194,17 @@ func on_bomb_planted() -> void:
 
 
 ## プレイヤーダメージ（特定プレイヤー）
+## 非推奨: SquadManager.damage_player_node()を直接使用してください
 func damage_player_node(player_node: Node3D, amount: float) -> void:
-	if not squad_manager:
-		return
-
-	var data = squad_manager.get_player_data_by_node(player_node)
-	if data:
-		data.take_damage(amount)
-		if not data.is_alive:
-			squad_manager.on_player_died(player_node)
-
-			# GameEvents経由でイベント発火
-			if has_node("/root/GameEvents"):
-				get_node("/root/GameEvents").unit_killed.emit(null, player_node, 0)
+	if squad_manager:
+		squad_manager.damage_player_node(player_node, amount)
 
 
-## プレイヤーダメージ（選択中プレイヤー、後方互換性）
+## プレイヤーダメージ（選択中プレイヤー）
+## 非推奨: SquadManager.damage_selected_player()を直接使用してください
 func damage_player(amount: float) -> void:
-	var selected = squad_manager.get_selected_player_node() if squad_manager else null
-	if selected:
-		damage_player_node(selected, amount)
+	if squad_manager:
+		squad_manager.damage_selected_player(amount)
 
 
 ## 実行フェーズかどうか

@@ -260,6 +260,44 @@ func get_alive_player_nodes() -> Array[Node3D]:
 	return nodes
 
 
+## 武器購入（価格ベース、後方互換性用）
+func buy_weapon_by_price(price: int) -> bool:
+	# 購入フェーズかどうかをMatchManagerに確認
+	if GameManager and GameManager.match_manager:
+		if not GameManager.match_manager.is_buy_phase():
+			return false
+
+	var data = get_selected_player()
+	if data and data.money >= price:
+		data.money -= price
+		squad_money_changed.emit(get_total_money())
+		return true
+
+	return false
+
+
+## プレイヤーダメージ（特定プレイヤー）
+func damage_player_node(player_node: Node3D, amount: float) -> void:
+	var data = get_player_data_by_node(player_node)
+	if data == null:
+		return
+
+	data.take_damage(amount)
+	if not data.is_alive:
+		on_player_died(player_node)
+
+		# GameEvents経由でイベント発火
+		if has_node("/root/GameEvents"):
+			get_node("/root/GameEvents").unit_killed.emit(null, player_node, 0)
+
+
+## プレイヤーダメージ（選択中プレイヤー）
+func damage_selected_player(amount: float) -> void:
+	var selected = get_selected_player_node()
+	if selected:
+		damage_player_node(selected, amount)
+
+
 ## デバッグ情報を出力
 func print_squad_status() -> void:
 	print("[SquadManager] === Squad Status ===")
