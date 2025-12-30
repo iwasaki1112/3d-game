@@ -13,9 +13,13 @@ signal weapon_type_changed(weapon_type: int)
 signal weapon_changed(weapon_id: int)
 
 @export_group("移動設定")
-@export var walk_speed: float = 3.0
-@export var run_speed: float = 6.0
+@export var base_walk_speed: float = 3.0
+@export var base_run_speed: float = 6.0
 @export var rotation_speed: float = 10.0
+
+# 武器による速度倍率適用後の実効速度
+var walk_speed: float = 3.0
+var run_speed: float = 6.0
 
 @export_group("物理設定")
 @export var gravity_value: float = -20.0
@@ -48,6 +52,7 @@ var is_alive: bool = true
 
 func _ready() -> void:
 	floor_snap_length = 1.0
+	_update_speed_from_weapon()  # 初期速度を設定
 	_setup_character()
 	_initial_placement.call_deferred()
 
@@ -308,6 +313,9 @@ func set_weapon_type(weapon_type: int) -> void:
 	current_weapon_type = weapon_type
 	weapon_type_changed.emit(weapon_type)
 
+	# 速度を更新
+	_update_speed_from_weapon()
+
 	# CharacterModelのY位置を調整（武器タイプによるアニメーション位置の差を補正）
 	var model = get_node_or_null("CharacterModel")
 	if model:
@@ -321,7 +329,7 @@ func set_weapon_type(weapon_type: int) -> void:
 	_play_current_animation()
 
 	var weapon_name = CharacterSetup.WEAPON_TYPE_NAMES.get(weapon_type, "unknown")
-	print("[%s] Weapon type changed to: %s" % [name, weapon_name])
+	print("[%s] Weapon type changed to: %s (speed: %.1f/%.1f)" % [name, weapon_name, walk_speed, run_speed])
 
 
 ## 現在の武器タイプを取得
@@ -363,3 +371,15 @@ func get_weapon_id() -> int:
 ## 現在の武器データを取得
 func get_weapon_data() -> Dictionary:
 	return CharacterSetup.get_weapon_data(current_weapon_id)
+
+
+## 武器タイプに応じた速度を更新
+func _update_speed_from_weapon() -> void:
+	var modifier = CharacterSetup.WEAPON_SPEED_MODIFIER.get(current_weapon_type, 1.0)
+	walk_speed = base_walk_speed * modifier
+	run_speed = base_run_speed * modifier
+
+
+## 現在の速度倍率を取得
+func get_speed_modifier() -> float:
+	return CharacterSetup.WEAPON_SPEED_MODIFIER.get(current_weapon_type, 1.0)
