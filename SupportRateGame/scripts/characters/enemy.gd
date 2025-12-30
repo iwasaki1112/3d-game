@@ -36,7 +36,8 @@ func _physics_process(delta: float) -> void:
 	if not is_alive:
 		return
 
-	if GameManager.current_state != GameManager.GameState.PLAYING:
+	# 実行フェーズでのみAIを動かす（作戦フェーズでは動かない）
+	if not GameManager.is_execution_phase():
 		return
 
 	# AI更新
