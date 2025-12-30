@@ -220,3 +220,17 @@ func damage_player(amount: float) -> void:
 	var selected = squad_manager.get_selected_player_node() if squad_manager else null
 	if selected:
 		damage_player_node(selected, amount)
+
+
+## 実行フェーズかどうか
+func is_execution_phase() -> bool:
+	if match_manager:
+		return match_manager.is_execution_phase()
+	return false
+
+
+## 作戦フェーズかどうか
+func is_strategy_phase() -> bool:
+	if match_manager:
+		return match_manager.is_strategy_phase()
+	return false

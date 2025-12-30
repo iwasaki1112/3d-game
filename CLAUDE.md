@@ -183,12 +183,11 @@ directional_shadow_blend_splits = true
 **必ず専用スクリプトを使用すること！** 手動でGodotエクスポートやXcode操作をしない。
 
 ```bash
-# iOS実機ビルド＆インストール（推奨）
-./scripts/ios_build.sh
-
-# Godotエクスポートも含める場合
+# iOS実機ビルド＆インストール（常にこれを使用）
 ./scripts/ios_build.sh --export
 ```
+
+**重要: 必ず`--export`オプションを付けること！** これにより最新のコードがエクスポートされる。
 
 ### スクリプトが行うこと
 1. 署名設定を自動修正（Automatic signing, Team ID設定）
