@@ -37,10 +37,8 @@ docker-compose down -v
 - `POST /v2/account/authenticate/email` - メール認証
 
 ### RPC
-- `POST /v2/rpc/create_room` - ルーム作成
-- `POST /v2/rpc/join_by_code` - ルームコードで参加
-- `POST /v2/rpc/list_rooms` - 公開ルーム一覧
-- `POST /v2/rpc/join_matchmaking` - ランダムマッチメイキング
+- `POST /v2/rpc/create_room` - 公開ルーム作成（1v1固定）
+- `POST /v2/rpc/list_rooms` - 公開ルーム一覧取得
 
 ## マッチ OpCodes
 
