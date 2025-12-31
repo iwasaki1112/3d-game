@@ -12,6 +12,7 @@ signal remote_player_left(user_id: String)
 signal remote_player_updated(user_id: String, position: Vector3, rotation: float)
 signal remote_player_action(user_id: String, action_type: String, data: Dictionary)
 signal game_state_updated(state: Dictionary)
+signal team_assigned(my_team: int, opponent_team: int)  # チーム割り当て通知
 
 # =====================================
 # OpCodes（サーバーと一致させる）
@@ -19,6 +20,7 @@ signal game_state_updated(state: Dictionary)
 enum OpCode {
 	GAME_START = 1,
 	GAME_EVENT = 2,
+	TEAM_ASSIGNMENT = 5,  # チーム割り当て（ホスト→ゲスト）
 	PLAYER_POSITION = 10,
 	PLAYER_ACTION = 11,
 	PHASE_CHANGE = 20,
@@ -182,6 +184,8 @@ func _on_match_data_received(op_code: int, data: Dictionary, sender_id: String) 
 			_handle_player_action(sender_id, data)
 		OpCode.GAME_EVENT:
 			_handle_game_event(data)
+		OpCode.TEAM_ASSIGNMENT:
+			_handle_team_assignment(data)
 		_:
 			print("[NetworkSync] Unknown op_code: ", op_code)
 
@@ -256,6 +260,35 @@ func _on_presence_left(presences: Array) -> void:
 			_remote_players.erase(user_id)
 			remote_player_left.emit(user_id)
 			print("[NetworkSync] Remote player left: ", user_id)
+
+# =====================================
+# チーム割り当て
+# =====================================
+
+## チーム割り当てを送信（ホストのみ）
+## host_team: ホストに割り当てるチーム（0=CT, 1=TERRORIST）
+func send_team_assignment(host_team: int) -> void:
+	if not GameManager.is_host:
+		return
+
+	var guest_team = 1 - host_team  # 反対のチーム
+	var data = {
+		"host_team": host_team,
+		"guest_team": guest_team
+	}
+	NakamaClient.send_match_data(OpCode.TEAM_ASSIGNMENT, data)
+	print("[NetworkSync] Sent team assignment: host=%d, guest=%d" % [host_team, guest_team])
+
+## チーム割り当て受信ハンドラ（ゲスト側）
+func _handle_team_assignment(data: Dictionary) -> void:
+	# ゲストはguest_teamを自分のチームとして受け取る
+	var my_team = data.get("guest_team", 0)
+	var opponent_team = data.get("host_team", 1)
+
+	GameManager.assigned_team = my_team as GameManager.Team
+	print("[NetworkSync] Received team assignment: my_team=%d, opponent=%d" % [my_team, opponent_team])
+
+	team_assigned.emit(my_team, opponent_team)
 
 # =====================================
 # ユーティリティ

@@ -39,23 +39,34 @@ func _ready() -> void:
 	_setup_fog_of_war_manager()
 	_setup_match_manager()
 
-	# CTチームを収集してSquadManagerに登録
-	var ct_members: Array[CharacterBody3D] = []
-	for child in ct_node.get_children():
+	# オンラインマッチの場合、割り当てられたチームに基づいて初期化
+	var my_team_node: Node3D = ct_node
+	var enemy_team_node: Node3D = t_node
+
+	if GameManager.is_online_match:
+		# 割り当てられたチームに応じてノードを入れ替え
+		if GameManager.assigned_team == GameManager.Team.TERRORIST:
+			my_team_node = t_node
+			enemy_team_node = ct_node
+		print("[GameScene] Online match - My team: %s" % ("CT" if GameManager.assigned_team == GameManager.Team.CT else "TERRORIST"))
+
+	# 自分のチームを収集してSquadManagerに登録
+	var my_team_members: Array[CharacterBody3D] = []
+	for child in my_team_node.get_children():
 		if child is CharacterBody3D:
-			ct_members.append(child)
+			my_team_members.append(child)
 
 	# SquadManagerで分隊を初期化
 	if squad_manager:
-		squad_manager.initialize_squad(ct_members)
+		squad_manager.initialize_squad(my_team_members)
 		squad_manager.player_selected.connect(_on_squad_player_selected)
 
-	# Tチームを収集（enemyスクリプトでグループに自動追加される）
-	for child in t_node.get_children():
+	# 敵チームを収集（enemyスクリプトでグループに自動追加される）
+	for child in enemy_team_node.get_children():
 		if child is CharacterBody3D:
 			enemies.append(child)
 
-	print("[GameScene] CT: %d, T: %d" % [ct_members.size(), enemies.size()])
+	print("[GameScene] My team: %d, Enemies: %d" % [my_team_members.size(), enemies.size()])
 
 	# 選択インジケーターを作成
 	_create_selection_indicator()
@@ -351,7 +362,10 @@ func _setup_network_sync() -> void:
 	# 有効化
 	network_sync_manager.activate()
 
-	print("[GameScene] NetworkSyncManager initialized for online match")
+	# チーム割り当ては既にlobby_screen.gdで完了している
+	print("[GameScene] NetworkSyncManager initialized - My team: %s" % (
+		"CT" if GameManager.assigned_team == GameManager.Team.CT else "TERRORIST"
+	))
 
 
 ## リモートプレイヤー参加
