@@ -17,6 +17,7 @@ const NetworkSyncManagerScript = preload("res://scripts/systems/network_sync_man
 @onready var ct_node: Node3D = $CT
 @onready var t_node: Node3D = $T
 @onready var game_ui: CanvasLayer = $GameUI
+@onready var map_node: Node3D = $Dust2Map
 
 var enemies: Array[CharacterBody3D] = []
 
@@ -86,7 +87,10 @@ func _ready() -> void:
 
 	print("[GameScene] My team: %d, Enemies: %d" % [my_team_members.size(), enemies.size()])
 
-	# デバッグ用：近接スポーン
+	# マップのスポーンポイントからキャラクターの位置を設定
+	_apply_spawn_positions_from_map(my_team_members, enemies)
+
+	# デバッグ用：近接スポーン（スポーンポイントより優先）
 	if GameManager.debug_spawn_nearby:
 		_apply_debug_spawn_positions(my_team_members, enemies)
 
@@ -527,6 +531,63 @@ func _on_game_state_updated(state: Dictionary) -> void:
 # =====================================
 # デバッグ用機能
 # =====================================
+
+## マップのスポーンポイントからキャラクターの位置を設定
+func _apply_spawn_positions_from_map(my_team: Array[CharacterBody3D], enemy_team: Array[CharacterBody3D]) -> void:
+	if not map_node:
+		print("[GameScene] Map node not found, skipping spawn position setup")
+		return
+
+	# マップからCTとTのスポーンポイントを取得
+	var ct_spawns: Array[Node3D] = []
+	var t_spawns: Array[Node3D] = []
+
+	# CTRespone* と TRespone* ノードを検索（GLBからインポートされたEmpty）
+	for child in map_node.get_children():
+		_find_spawn_points_recursive(child, ct_spawns, t_spawns)
+
+	# 直接の子ノードも確認
+	_find_spawn_points_recursive(map_node, ct_spawns, t_spawns)
+
+	print("[GameScene] Found spawn points - CT: %d, T: %d" % [ct_spawns.size(), t_spawns.size()])
+
+	# オンラインマッチの場合、割り当てられたチームに基づいてスポーンポイントを選択
+	var my_team_spawns: Array[Node3D]
+	var enemy_team_spawns: Array[Node3D]
+
+	if GameManager.is_online_match and GameManager.assigned_team == GameManager.Team.TERRORIST:
+		my_team_spawns = t_spawns
+		enemy_team_spawns = ct_spawns
+	else:
+		my_team_spawns = ct_spawns
+		enemy_team_spawns = t_spawns
+
+	# 自チームの位置を設定
+	for i in range(min(my_team.size(), my_team_spawns.size())):
+		var spawn_pos = my_team_spawns[i].global_position
+		# Y座標は地面から少し上に（キャラクターの高さを考慮）
+		spawn_pos.y = 1.0
+		my_team[i].global_position = spawn_pos
+		print("[GameScene] Spawned %s at %s" % [my_team[i].name, spawn_pos])
+
+	# 敵チームの位置を設定
+	for i in range(min(enemy_team.size(), enemy_team_spawns.size())):
+		var spawn_pos = enemy_team_spawns[i].global_position
+		spawn_pos.y = 1.0
+		enemy_team[i].global_position = spawn_pos
+		print("[GameScene] Spawned %s at %s" % [enemy_team[i].name, spawn_pos])
+
+
+## スポーンポイントを再帰的に検索
+func _find_spawn_points_recursive(node: Node, ct_spawns: Array[Node3D], t_spawns: Array[Node3D]) -> void:
+	if node.name.begins_with("CTRespone"):
+		ct_spawns.append(node as Node3D)
+	elif node.name.begins_with("TRespone"):
+		t_spawns.append(node as Node3D)
+
+	for child in node.get_children():
+		_find_spawn_points_recursive(child, ct_spawns, t_spawns)
+
 
 ## デバッグ用：キャラクターを近くにスポーン
 func _apply_debug_spawn_positions(my_team: Array[CharacterBody3D], enemy_team: Array[CharacterBody3D]) -> void:
