@@ -9,6 +9,7 @@ const PlayerDataClass = preload("res://scripts/data/player_data.gd")
 
 # シグナル
 signal player_selected(player_data: RefCounted, index: int)
+signal player_deselected
 signal player_died(player_data: RefCounted, index: int)
 signal all_players_died
 signal squad_money_changed(total: int)
@@ -80,6 +81,18 @@ func select_previous_player() -> void:
 	var prev_index = _find_previous_alive_player(selected_index)
 	if prev_index != -1:
 		select_player(prev_index)
+
+
+## 選択解除
+func deselect_player() -> void:
+	selected_index = -1
+	player_deselected.emit()
+	print("[SquadManager] Player deselected")
+
+
+## プレイヤーが選択されているか
+func has_selection() -> bool:
+	return selected_index >= 0 and selected_index < squad.size()
 
 
 ## 現在選択中のプレイヤーデータを取得
