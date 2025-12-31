@@ -24,7 +24,7 @@ signal join_by_code_failed(error: String)
 # =====================================
 # 設定
 # =====================================
-@export var server_host: String = "127.0.0.1"
+@export var server_host: String = "192.168.11.32"  # LAN IP for cross-device testing
 @export var server_port: int = 7350
 @export var server_key: String = "supportrate_dev_key"
 @export var use_ssl: bool = false
