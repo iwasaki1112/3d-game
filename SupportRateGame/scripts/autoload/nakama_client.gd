@@ -16,6 +16,10 @@ signal match_data_received(op_code: int, data: Dictionary, sender_id: String)
 signal match_presence_joined(presences: Array)
 signal match_presence_left(presences: Array)
 signal matchmaker_matched(match_id: String, token: String, users: Array)
+signal room_created(match_id: String, room_code: String)
+signal room_create_failed(error: String)
+signal rooms_listed(rooms: Array)
+signal join_by_code_failed(error: String)
 
 # =====================================
 # 設定
@@ -251,6 +255,11 @@ func get_user_id() -> String:
 		return _session.user_id
 	return ""
 
+func get_session_id() -> String:
+	if _session:
+		return _session.session_id
+	return ""
+
 # =====================================
 # 内部メソッド
 # =====================================
@@ -272,6 +281,14 @@ func _get_auth_headers(basic_auth: bool = false) -> PackedStringArray:
 	return headers
 
 func _get_or_create_device_id() -> String:
+	# テスト用: 毎回新しいIDを生成（同一マシンで複数クライアントをテストするため）
+	# 本番では保存されたIDを使用するように変更
+	if OS.has_feature("debug"):
+		# デバッグビルドではランダムIDを生成（テスト用）
+		var random_id = _generate_uuid()
+		print("[NakamaClient] Debug mode: Generated new device ID: ", random_id)
+		return random_id
+
 	var config_path = "user://device_id.cfg"
 	var config = ConfigFile.new()
 
@@ -352,19 +369,22 @@ func _handle_request_success(request_type: String, data: Dictionary) -> void:
 			var match_id = data.get("match_id", "")
 			var room_code = data.get("room_code", "")
 			print("Room created: ", match_id, " Code: ", room_code)
-			# シグナルで通知（後で追加）
+			room_created.emit(match_id, room_code if room_code else "")
 
 		"join_by_code":
 			var match_id = data.get("match_id", "")
+			var error = data.get("error", "")
 			if not match_id.is_empty():
 				join_match(match_id)
+			elif not error.is_empty():
+				join_by_code_failed.emit(error)
 			else:
-				push_error("Failed to join by code: " + data.get("error", "Unknown error"))
+				join_by_code_failed.emit("Unknown error")
 
 		"list_rooms":
 			var rooms = data.get("rooms", [])
 			print("Available rooms: ", rooms)
-			# シグナルで通知（後で追加）
+			rooms_listed.emit(rooms)
 
 		_:
 			print("Unhandled request type: ", request_type, " Data: ", data)
@@ -397,6 +417,13 @@ func _handle_socket_message(message: String) -> void:
 	if data.has("match"):
 		var match_data = data.match
 		_current_match_id = match_data.get("match_id", "")
+
+		# 自分のプレゼンスからsession_idを取得して保存
+		var self_presence = match_data.get("self", {})
+		if self_presence.has("session_id") and _session:
+			_session.session_id = self_presence.get("session_id", "")
+			print("[NakamaClient] Stored session_id from match join: ", _session.session_id)
+
 		match_joined.emit(_current_match_id)
 
 		# 初期プレゼンス
@@ -420,10 +447,15 @@ func _handle_socket_message(message: String) -> void:
 
 	# プレゼンス更新
 	elif data.has("match_presence_event"):
+		print("[NakamaClient] match_presence_event received")
 		var event = data.match_presence_event
+		print("[NakamaClient] event data: ", event)
 		var joins = event.get("joins", [])
 		var leaves = event.get("leaves", [])
+		print("[NakamaClient] joins: ", joins)
+		print("[NakamaClient] leaves: ", leaves)
 		if joins.size() > 0:
+			print("[NakamaClient] Emitting match_presence_joined signal with: ", joins)
 			match_presence_joined.emit(joins)
 		if leaves.size() > 0:
 			match_presence_left.emit(leaves)
@@ -455,7 +487,9 @@ func _parse_jwt(token: String) -> void:
 		var payload = json.data
 		_session.user_id = payload.get("uid", "")
 		_session.username = payload.get("usn", "")
+		_session.session_id = payload.get("sid", "")
 		_session.expires_at = payload.get("exp", 0)
+		print("[NakamaClient] Parsed JWT - user_id: %s, session_id: %s" % [_session.user_id, _session.session_id])
 
 
 # =====================================
@@ -466,6 +500,7 @@ class NakamaSession:
 	var refresh_token: String = ""
 	var user_id: String = ""
 	var username: String = ""
+	var session_id: String = ""
 	var created: bool = false
 	var expires_at: int = 0
 

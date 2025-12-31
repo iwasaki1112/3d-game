@@ -52,7 +52,7 @@ horizontal_alignment = 1
 [node name="SubtitleLabel" type="Label" parent="AuthPanel/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 16
-text = "オンラインマルチプレイヤー"
+text = "オンライン対戦"
 horizontal_alignment = 1
 
 [node name="UsernameInput" type="LineEdit" parent="AuthPanel/VBoxContainer"]
@@ -88,12 +88,12 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -150.0
-offset_top = -180.0
+offset_top = -100.0
 offset_right = 150.0
-offset_bottom = 180.0
+offset_bottom = 100.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 15
+theme_override_constants/separation = 20
 
 [node name="WelcomeLabel" type="Label" parent="MainPanel/VBoxContainer"]
 layout_mode = 2
@@ -104,40 +104,15 @@ horizontal_alignment = 1
 [node name="Separator1" type="HSeparator" parent="MainPanel/VBoxContainer"]
 layout_mode = 2
 
-[node name="QuickMatchButton" type="Button" parent="MainPanel/VBoxContainer"]
-custom_minimum_size = Vector2(300, 50)
-layout_mode = 2
-text = "クイックマッチ"
-
-[node name="Separator2" type="HSeparator" parent="MainPanel/VBoxContainer"]
-layout_mode = 2
-
 [node name="CreateRoomButton" type="Button" parent="MainPanel/VBoxContainer"]
 custom_minimum_size = Vector2(300, 50)
 layout_mode = 2
-text = "ルームを作成"
-
-[node name="RoomCodeContainer" type="HBoxContainer" parent="MainPanel/VBoxContainer"]
-layout_mode = 2
-
-[node name="RoomCodeInput" type="LineEdit" parent="MainPanel/VBoxContainer/RoomCodeContainer"]
-custom_minimum_size = Vector2(200, 40)
-layout_mode = 2
-size_flags_horizontal = 3
-placeholder_text = "ルームコード"
-alignment = 1
-max_length = 6
-caret_blink = true
-
-[node name="JoinRoomButton" type="Button" parent="MainPanel/VBoxContainer/RoomCodeContainer"]
-custom_minimum_size = Vector2(80, 40)
-layout_mode = 2
-text = "参加"
+text = "部屋を作成"
 
 [node name="BrowseRoomsButton" type="Button" parent="MainPanel/VBoxContainer"]
 custom_minimum_size = Vector2(300, 50)
 layout_mode = 2
-text = "公開ルームを探す"
+text = "部屋を探す"
 
 [node name="RoomListPanel" type="Control" parent="."]
 visible = false
@@ -159,7 +134,7 @@ offset_right = 100.0
 offset_bottom = 60.0
 grow_horizontal = 2
 theme_override_font_sizes/font_size = 24
-text = "公開ルーム"
+text = "部屋一覧"
 horizontal_alignment = 1
 
 [node name="ScrollContainer" type="ScrollContainer" parent="RoomListPanel"]
@@ -207,7 +182,7 @@ grow_horizontal = 2
 grow_vertical = 0
 text = "更新"
 
-[node name="CreateRoomPanel" type="Control" parent="."]
+[node name="WaitingPanel" type="Control" parent="."]
 visible = false
 layout_mode = 1
 anchors_preset = 15
@@ -216,7 +191,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="VBoxContainer" type="VBoxContainer" parent="CreateRoomPanel"]
+[node name="VBoxContainer" type="VBoxContainer" parent="WaitingPanel"]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -224,93 +199,27 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -150.0
-offset_top = -120.0
+offset_top = -80.0
 offset_right = 150.0
-offset_bottom = 120.0
+offset_bottom = 80.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/separation = 20
+theme_override_constants/separation = 30
 
-[node name="TitleLabel" type="Label" parent="CreateRoomPanel/VBoxContainer"]
+[node name="TitleLabel" type="Label" parent="WaitingPanel/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 24
-text = "ルーム作成"
+text = "1v1 対戦"
 horizontal_alignment = 1
 
-[node name="TeamSizeLabel" type="Label" parent="CreateRoomPanel/VBoxContainer"]
-layout_mode = 2
-text = "チームサイズ"
-horizontal_alignment = 1
-
-[node name="TeamSizeOption" type="OptionButton" parent="CreateRoomPanel/VBoxContainer"]
-custom_minimum_size = Vector2(300, 40)
-layout_mode = 2
-
-[node name="PrivateRoomCheck" type="CheckBox" parent="CreateRoomPanel/VBoxContainer"]
-layout_mode = 2
-text = "プライベートルーム（コード必須）"
-
-[node name="RoomCodeLabel" type="Label" parent="CreateRoomPanel/VBoxContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 20
-horizontal_alignment = 1
-
-[node name="CreateConfirmButton" type="Button" parent="CreateRoomPanel/VBoxContainer"]
-custom_minimum_size = Vector2(300, 50)
-layout_mode = 2
-text = "ルームを作成"
-
-[node name="BackButton" type="Button" parent="CreateRoomPanel/VBoxContainer"]
-custom_minimum_size = Vector2(300, 40)
-layout_mode = 2
-text = "戻る"
-
-[node name="MatchmakingPanel" type="Control" parent="."]
-visible = false
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-
-[node name="VBoxContainer" type="VBoxContainer" parent="MatchmakingPanel"]
-layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -150.0
-offset_top = -100.0
-offset_right = 150.0
-offset_bottom = 100.0
-grow_horizontal = 2
-grow_vertical = 2
-theme_override_constants/separation = 20
-
-[node name="TitleLabel" type="Label" parent="MatchmakingPanel/VBoxContainer"]
-layout_mode = 2
-theme_override_font_sizes/font_size = 24
-text = "クイックマッチ"
-horizontal_alignment = 1
-
-[node name="TeamSizeLabel" type="Label" parent="MatchmakingPanel/VBoxContainer"]
-layout_mode = 2
-text = "チームサイズ"
-horizontal_alignment = 1
-
-[node name="TeamSizeOption" type="OptionButton" parent="MatchmakingPanel/VBoxContainer"]
-custom_minimum_size = Vector2(300, 40)
-layout_mode = 2
-
-[node name="StatusLabel" type="Label" parent="MatchmakingPanel/VBoxContainer"]
+[node name="StatusLabel" type="Label" parent="WaitingPanel/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.5, 0.8, 1, 1)
-text = "マッチング中..."
+theme_override_font_sizes/font_size = 18
+text = "対戦相手を待っています..."
 horizontal_alignment = 1
 
-[node name="CancelButton" type="Button" parent="MatchmakingPanel/VBoxContainer"]
+[node name="CancelButton" type="Button" parent="WaitingPanel/VBoxContainer"]
 custom_minimum_size = Vector2(300, 50)
 layout_mode = 2
 text = "キャンセル"
