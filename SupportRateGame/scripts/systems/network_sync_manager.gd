@@ -9,7 +9,7 @@ class_name NetworkSyncManager
 # =====================================
 signal remote_player_joined(user_id: String, username: String)
 signal remote_player_left(user_id: String)
-signal remote_player_updated(user_id: String, position: Vector3, rotation: float)
+signal remote_player_updated(user_id: String, character_name: String, position: Vector3, rotation: float, is_moving: bool, is_running: bool)
 signal remote_player_action(user_id: String, action_type: String, data: Dictionary)
 signal game_state_updated(state: Dictionary)
 signal team_assigned(my_team: int, opponent_team: int)  # チーム割り当て通知
@@ -106,11 +106,23 @@ func _send_position_update() -> void:
 		_last_sent_position = position
 		_last_sent_rotation = rotation
 
+		# アニメーション状態を取得
+		var is_moving = false
+		var is_running = false
+		if "is_moving" in player_node:
+			is_moving = player_node.is_moving
+		if "is_running" in player_node:
+			is_running = player_node.is_running
+
 		var data = {
+			"sender": _local_user_id,  # 送信者IDを追加
+			"name": player_node.name,  # キャラクター名を追加
 			"x": position.x,
 			"y": position.y,
 			"z": position.z,
 			"r": rotation,
+			"m": is_moving,  # 移動中フラグ
+			"run": is_running,  # 走りフラグ
 			"t": Time.get_ticks_msec()  # タイムスタンプ
 		}
 		NakamaClient.send_match_data(OpCode.PLAYER_POSITION, data)
@@ -173,8 +185,8 @@ func send_phase_change(phase: String, round_num: int) -> void:
 # 受信ハンドラ
 # =====================================
 func _on_match_data_received(op_code: int, data: Dictionary, sender_id: String) -> void:
-	# 自分自身のデータは無視
-	if sender_id == _local_user_id:
+	# 自分自身のデータは無視（sender_idが空でない場合のみ）
+	if not sender_id.is_empty() and sender_id == _local_user_id:
 		return
 
 	match op_code:
@@ -190,25 +202,43 @@ func _on_match_data_received(op_code: int, data: Dictionary, sender_id: String) 
 			print("[NetworkSync] Unknown op_code: ", op_code)
 
 func _handle_player_position(sender_id: String, data: Dictionary) -> void:
+	# データからsender_idを取得（presenceが含まれない場合の対策）
+	var actual_sender = data.get("sender", sender_id)
+	if actual_sender.is_empty():
+		actual_sender = sender_id
+
+	# 自分自身のデータは無視
+	if actual_sender == _local_user_id:
+		return
+
+	var character_name = data.get("name", "")
 	var position = Vector3(
 		data.get("x", 0.0),
 		data.get("y", 0.0),
 		data.get("z", 0.0)
 	)
 	var rotation = data.get("r", 0.0)
+	var is_moving = data.get("m", false)
+	var is_running = data.get("run", false)
 
 	# リモートプレイヤー情報を更新
-	if _remote_players.has(sender_id):
-		_remote_players[sender_id].position = position
-		_remote_players[sender_id].rotation = rotation
+	if _remote_players.has(actual_sender):
+		_remote_players[actual_sender].position = position
+		_remote_players[actual_sender].rotation = rotation
+		_remote_players[actual_sender].character_name = character_name
+		_remote_players[actual_sender].is_moving = is_moving
+		_remote_players[actual_sender].is_running = is_running
 	else:
-		_remote_players[sender_id] = {
+		_remote_players[actual_sender] = {
 			"position": position,
 			"rotation": rotation,
+			"character_name": character_name,
+			"is_moving": is_moving,
+			"is_running": is_running,
 			"node": null
 		}
 
-	remote_player_updated.emit(sender_id, position, rotation)
+	remote_player_updated.emit(actual_sender, character_name, position, rotation, is_moving, is_running)
 
 func _handle_player_action(sender_id: String, data: Dictionary) -> void:
 	var action_type = data.get("type", "")

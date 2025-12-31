@@ -290,6 +290,9 @@ const OPCODE_TEAM_ASSIGNMENT: int = 5  # NetworkSyncManager.OpCode.TEAM_ASSIGNME
 
 ## ホストがチーム割り当てをゲストに送信
 func _send_team_assignment_to_guest() -> void:
+	# ゲストがマッチに完全に参加するまで待つ（長めに設定）
+	await get_tree().create_timer(1.0).timeout
+
 	# ホストのチームはすでにランダムで決定済み（room作成時）
 	var host_team = GameManager.assigned_team
 	var guest_team = 1 - host_team  # 反対のチーム
@@ -298,22 +301,32 @@ func _send_team_assignment_to_guest() -> void:
 		"host_team": host_team,
 		"guest_team": guest_team
 	}
-	NakamaClient.send_match_data(OPCODE_TEAM_ASSIGNMENT, data)
-	print("[LobbyScreen] Sent team assignment - Host: %s, Guest: %s" % [
+
+	print("[LobbyScreen] Sending team assignment - Host: %s, Guest: %s" % [
 		"CT" if host_team == 0 else "TERRORIST",
 		"CT" if guest_team == 0 else "TERRORIST"
 	])
 
+	# 複数回送信してゲストが確実に受け取れるようにする
+	for i in range(3):
+		NakamaClient.send_match_data(OPCODE_TEAM_ASSIGNMENT, data)
+		print("[LobbyScreen] Team assignment sent (attempt %d)" % (i + 1))
+		await get_tree().create_timer(0.3).timeout
+
 	# ホストもゲームに遷移
-	await get_tree().create_timer(0.3).timeout  # ゲストがメッセージを受け取る時間を確保
+	await get_tree().create_timer(0.5).timeout
 	_transition_to_game(GameManager.current_match_id)
 
 ## マッチデータ受信（ゲスト側でチーム割り当てを受信）
 func _on_match_data_received(op_code: int, data: Dictionary, _sender_id: String) -> void:
+	print("[LobbyScreen] Received match data - op_code: %d, waiting: %s" % [op_code, _waiting_for_team_assignment])
+
 	if op_code != OPCODE_TEAM_ASSIGNMENT:
+		print("[LobbyScreen] Ignoring op_code %d (expected %d)" % [op_code, OPCODE_TEAM_ASSIGNMENT])
 		return
 
 	if not _waiting_for_team_assignment:
+		print("[LobbyScreen] Not waiting for team assignment, ignoring")
 		return
 
 	# ゲストはguest_teamを自分のチームとして設定

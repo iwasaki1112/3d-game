@@ -21,6 +21,9 @@ var current_match_id: String = ""
 var is_host: bool = false
 var assigned_team: Team = Team.CT  # オンラインマッチで割り当てられたチーム
 
+# デバッグ用設定
+var debug_spawn_nearby: bool = false  # キャラクターを近くにスポーンさせる
+
 # シーン内ノード参照（game.tscn内に配置）
 var match_manager: Node = null
 var squad_manager: Node = null
