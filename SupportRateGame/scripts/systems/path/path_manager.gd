@@ -12,6 +12,7 @@ signal path_cleared
 signal path_time_changed(current_time: float, max_time: float)  # UI通知用
 
 @export var min_point_distance: float = 0.5  # ウェイポイント間の最小距離
+@export var tap_threshold: float = 0.5  # タップ判定の距離閾値
 
 # パス長制限
 var max_path_time: float = 10.0  # デフォルト値（execution_timeから取得）
@@ -21,6 +22,7 @@ var current_path_time: float = 0.0
 var current_path: Array[Vector3] = []
 var run_flags: Array[bool] = []
 var is_drawing: bool = false
+var draw_start_world_pos: Vector3 = Vector3.INF  # タップ判定用
 
 # プレイヤーごとのパスデータ: { player_node: { path: Array, run_flags: Array, renderer: Node3D } }
 var player_paths: Dictionary = {}
@@ -48,6 +50,10 @@ func _ready() -> void:
 		events.round_started.connect(_on_round_started)
 		events.strategy_phase_started.connect(_on_strategy_phase_started)
 		events.execution_phase_started.connect(_on_execution_phase_started)
+
+	# SquadManagerの選択解除シグナルに接続
+	if GameManager and GameManager.squad_manager:
+		GameManager.squad_manager.player_deselected.connect(_on_player_deselected)
 
 	# execution_timeを取得
 	_update_max_path_time()
@@ -86,8 +92,20 @@ func _on_draw_started(_screen_pos: Vector2, world_pos: Vector3) -> void:
 	if not _can_draw():
 		return
 
-	# タップ位置に別のプレイヤーがいる場合はそのプレイヤーに切り替え（パス描画は続行）
-	_check_and_switch_player(world_pos)
+	# タップ開始位置を記録（タップ判定用）
+	draw_start_world_pos = world_pos
+
+	# タップ位置にプレイヤーがいるかチェック
+	var tapped_player := _get_player_at_position(world_pos)
+
+	# プレイヤーをタップした場合のみパス描画を開始
+	if not tapped_player:
+		# 何もない場所 → パス描画しない（タップ判定は_on_draw_endedで行う）
+		return
+
+	# プレイヤーをタップ → そのプレイヤーを選択してパス描画開始
+	if tapped_player != player:
+		_switch_to_player(tapped_player)
 
 	is_drawing = true
 	current_path.clear()
@@ -132,10 +150,18 @@ func _on_draw_moved(_screen_pos: Vector2, world_pos: Vector3) -> void:
 
 ## 描画終了
 func _on_draw_ended(_screen_pos: Vector2) -> void:
+	# パス描画していない場合（何もない場所をタップ/ドラッグした場合）
 	if not is_drawing:
+		# タップ判定：何もない場所をタップしたら選択解除
+		if draw_start_world_pos != Vector3.INF:
+			var tapped_player := _get_player_at_position(draw_start_world_pos)
+			if not tapped_player:
+				_deselect_current_player()
+			draw_start_world_pos = Vector3.INF
 		return
 
 	is_drawing = false
+	draw_start_world_pos = Vector3.INF
 
 	if current_path.size() >= 2 and player:
 		# 最終的な解析
@@ -309,22 +335,52 @@ func _can_draw() -> bool:
 	return true  # MatchManagerがなければ許可
 
 
-## タップ位置に別のプレイヤーがいるかチェックし、いれば選択を切り替える
-## 切り替え後もパス描画を続行する（タップ&ドラッグで即座にパスを描けるように）
-func _check_and_switch_player(world_pos: Vector3) -> void:
+## 位置にいるプレイヤーを取得
+func _get_player_at_position(world_pos: Vector3) -> Node3D:
+	if not GameManager or not GameManager.squad_manager:
+		return null
+	return GameManager.squad_manager.get_player_at_position(world_pos)
+
+
+## プレイヤーを切り替え
+func _switch_to_player(new_player: Node3D) -> void:
 	if not GameManager or not GameManager.squad_manager:
 		return
 
 	var sm = GameManager.squad_manager
+	sm.find_and_select_player_at_position(new_player.global_position)
+	# playerを直接更新（シグナル経由の更新を待たずにパス描画を開始）
+	player = new_player
 
-	# SquadManagerの共通APIを使用
-	var closest_player: Node3D = sm.get_player_at_position(world_pos)
 
-	# 別のプレイヤーをタップした場合、そのプレイヤーを選択してパス描画を続行
-	if closest_player and closest_player != player:
-		sm.find_and_select_player_at_position(world_pos)
-		# playerを直接更新（シグナル経由の更新を待たずにパス描画を開始）
-		player = closest_player
+## 選択解除（パスは維持）
+func _deselect_current_player() -> void:
+	if not GameManager or not GameManager.squad_manager:
+		return
+
+	# SquadManagerの選択解除
+	GameManager.squad_manager.deselect_player()
+
+	# 自身のプレイヤー参照をクリア（パスはそのまま）
+	player = null
+
+
+## SquadManagerの選択解除シグナルを受信
+func _on_player_deselected() -> void:
+	# プレイヤー参照のみクリア（パスは維持）
+	player = null
+
+
+## タップ判定（移動量が閾値以下）
+func _is_tap() -> bool:
+	if draw_start_world_pos == Vector3.INF:
+		return false
+	if current_path.size() < 2:
+		return true
+	# 開始位置から最後の位置までの距離をチェック
+	var end_pos := current_path[current_path.size() - 1]
+	var distance := draw_start_world_pos.distance_to(end_pos)
+	return distance < tap_threshold
 
 
 ## プレイヤーのパスデータを取得
