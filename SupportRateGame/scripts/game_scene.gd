@@ -14,8 +14,8 @@ const FogOfWarManagerScene = preload("res://scenes/systems/fog_of_war_manager.ts
 const FogOfWarRendererScene = preload("res://scenes/systems/fog_of_war_renderer.tscn")
 const NetworkSyncManagerScript = preload("res://scripts/systems/network_sync_manager.gd")
 
-@onready var players_node: Node3D = $Players
-@onready var enemies_node: Node3D = $Enemies
+@onready var ct_node: Node3D = $CT
+@onready var t_node: Node3D = $T
 @onready var game_ui: CanvasLayer = $GameUI
 
 var enemies: Array[CharacterBody3D] = []
@@ -39,23 +39,23 @@ func _ready() -> void:
 	_setup_fog_of_war_manager()
 	_setup_match_manager()
 
-	# プレイヤーを収集してSquadManagerに登録
-	var players: Array[CharacterBody3D] = []
-	for child in players_node.get_children():
+	# CTチームを収集してSquadManagerに登録
+	var ct_members: Array[CharacterBody3D] = []
+	for child in ct_node.get_children():
 		if child is CharacterBody3D:
-			players.append(child)
+			ct_members.append(child)
 
 	# SquadManagerで分隊を初期化
 	if squad_manager:
-		squad_manager.initialize_squad(players)
+		squad_manager.initialize_squad(ct_members)
 		squad_manager.player_selected.connect(_on_squad_player_selected)
 
-	# 敵を収集（敵はenemyスクリプトでグループに自動追加される）
-	for child in enemies_node.get_children():
+	# Tチームを収集（enemyスクリプトでグループに自動追加される）
+	for child in t_node.get_children():
 		if child is CharacterBody3D:
 			enemies.append(child)
 
-	print("[GameScene] Players: %d, Enemies: %d" % [players.size(), enemies.size()])
+	print("[GameScene] CT: %d, T: %d" % [ct_members.size(), enemies.size()])
 
 	# 選択インジケーターを作成
 	_create_selection_indicator()
