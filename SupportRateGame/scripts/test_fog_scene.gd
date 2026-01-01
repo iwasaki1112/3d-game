@@ -48,11 +48,9 @@ func _setup_fog_of_war_renderer() -> void:
 	print("[TestFog] FogOfWarRenderer initialized")
 
 
-func _process(_delta: float) -> void:
-	_update_camera()
-
-
 func _physics_process(delta: float) -> void:
+	# カメラ更新も物理フレームで行う（物理補間と連携）
+	_update_camera()
 	if not player:
 		return
 
@@ -103,3 +101,5 @@ func _update_camera() -> void:
 	# カメラをプレイヤーの上に配置してlookAt
 	camera.global_position = player.global_position + Vector3(0, camera_height, camera_distance)
 	camera.look_at(player.global_position, Vector3.UP)
+	# 物理補間をリセット（直接位置設定後に必要）
+	camera.reset_physics_interpolation()

@@ -22,9 +22,12 @@ signal visibility_changed(visible_points: Array)
 # 親キャラクター参照
 var character: CharacterBody3D = null
 
-# 視野ポリゴンを構成する点のリスト
-var visible_points: Array = []  # Array of Vector3
+# 視野ポリゴンを構成する点のリスト（相対座標）
+var visible_points: Array = []  # Array of Vector3 (relative to origin)
 var _visible_points_size: int = 0
+
+# 視野の原点（キャラクター位置）- レンダラーがスムーズ補間に使用
+var vision_origin: Vector3 = Vector3.ZERO
 
 # 壁検出用コリジョンマスク
 var collision_mask: int = 2  # デフォルトは地形レイヤー
@@ -44,7 +47,7 @@ func _ready() -> void:
 
 	# 敵チームの場合は即座に処理を無効化
 	if not _should_register_with_fog():
-		set_physics_process(false)
+		set_process(false)
 		print("[VisionComponent] Disabled for enemy team: %s" % character.name)
 		return
 
@@ -58,7 +61,7 @@ func _deferred_register() -> void:
 	await get_tree().process_frame
 
 	if not _should_register_with_fog():
-		set_physics_process(false)
+		set_process(false)
 		return
 
 	var fow = _get_fog_of_war_manager()
@@ -90,7 +93,7 @@ func _should_register_with_fog() -> bool:
 	return true
 
 
-func _physics_process(delta: float) -> void:
+func _process(delta: float) -> void:
 	if not character:
 		return
 
@@ -101,15 +104,20 @@ func _physics_process(delta: float) -> void:
 
 
 ## 視界を計算（Sight & Lightアルゴリズム）
+## 相対座標で出力し、レンダラーがスムーズ補間できるようにする
 func _calculate_visibility() -> void:
 	if not character or not character.is_inside_tree():
 		_visible_points_size = 0
 		return
 
-	var origin := character.global_position + Vector3(0, height_offset, 0)
+	var char_pos := character.global_position
+	var origin := char_pos + Vector3(0, height_offset, 0)
 	var forward := character.global_transform.basis.z  # +Z方向
 	var forward_angle := atan2(forward.x, forward.z)
 	var half_fov := deg_to_rad(fov_angle / 2.0)
+
+	# 原点を保存（レンダラーがスムーズ補間に使用）
+	vision_origin = char_pos
 
 	# FOVの境界角度
 	var min_angle := forward_angle - half_fov
@@ -152,9 +160,9 @@ func _calculate_visibility() -> void:
 		if unique_angles.is_empty() or absf(angle - unique_angles[-1]) > 0.00001:
 			unique_angles.append(angle)
 
-	# レイキャストを実行して交点を収集
-	var intersection_points: Array = []
-	intersection_points.append(character.global_position)  # 中心点
+	# レイキャストを実行して交点を収集（相対座標で保存）
+	var relative_points: Array = []
+	relative_points.append(Vector3.ZERO)  # 中心点（原点からの相対位置=0）
 
 	var space_state := character.get_world_3d().direct_space_state
 	var query := PhysicsRayQueryParameters3D.new()
@@ -173,11 +181,14 @@ func _calculate_visibility() -> void:
 		var result := space_state.intersect_ray(query)
 
 		if result:
-			intersection_points.append(result.position)
+			# ワールド座標から相対座標に変換
+			var rel_pos: Vector3 = result.position - char_pos
+			relative_points.append(rel_pos)
 		else:
-			intersection_points.append(end_point)
+			var rel_pos: Vector3 = end_point - char_pos
+			relative_points.append(rel_pos)
 
-	visible_points = intersection_points
+	visible_points = relative_points
 	_visible_points_size = visible_points.size()
 	visibility_changed.emit(visible_points)
 
