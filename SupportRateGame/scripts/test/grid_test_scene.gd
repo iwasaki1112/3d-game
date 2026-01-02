@@ -383,11 +383,10 @@ func _finish_drawing() -> void:
 	_is_drawing = false
 
 	if _freehand_points.size() >= 2 and _path_converter:
-		# パスをグリッドに変換
-		var result = _path_converter.convert_and_optimize(_freehand_points)
+		# パスをグリッドに変換（A*パスファインディングで障害物回避）
+		var grid_cells = _path_converter.convert_with_pathfinding(_freehand_points)
 
-		# 結果を表示（全セルを表示）
-		var grid_cells = result["grid_cells"]
+		# 結果を表示
 		grid_visualizer.show_path(grid_cells)
 
 		# キャラクター用のパスを保存
@@ -406,9 +405,9 @@ func _finish_drawing() -> void:
 			if flag:
 				sprint_count += 1
 
-		print("[GridTest] Path converted:")
-		print("  - Original points: %d" % result["original_points"])
-		print("  - Grid cells: %d" % result["grid_cells"].size())
+		print("[GridTest] Path converted (A* pathfinding):")
+		print("  - Original points: %d" % _freehand_points.size())
+		print("  - Grid cells: %d" % grid_cells.size())
 		print("  - Sprint cells: %d (auto-detected)" % sprint_count)
 		print("  - Press SPACE to move character")
 
