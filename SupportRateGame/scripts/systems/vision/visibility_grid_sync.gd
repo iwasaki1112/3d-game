@@ -1,21 +1,21 @@
 class_name VisibilityGridSync
 extends RefCounted
 
-## 可視性グリッド同期クラス
+## 可視性グリッド同期クラス（GridManager連携版）
 ## ネットワーク同期用にグリッドデータを圧縮・差分送信する
+## GridManagerと連携して座標変換を行う
 ##
 ## 機能:
-## - グリッドをビットマップに変換（128x128 = 2048バイト）
+## - グリッドをビットマップに変換
 ## - 前フレームとの差分をXOR計算
 ## - RLE圧縮で差分データを軽量化
 ## - 敵位置の可視性フィルタリング
 
-# グリッド解像度
-var grid_resolution: Vector2i = Vector2i(128, 128)
+# グリッド解像度（GridManagerと同期）
+var grid_resolution: Vector2i = Vector2i(32, 32)
 
-# マップ範囲（ワールド座標）
-var map_min: Vector2 = Vector2(-50, -50)
-var map_max: Vector2 = Vector2(50, 50)
+# GridManager参照
+var _grid_manager = null
 
 # 現在と前フレームのビットマップ
 var _current_bitmap: PackedByteArray = PackedByteArray()
@@ -27,25 +27,20 @@ var last_compressed_size: int = 0
 var compression_ratio: float = 0.0
 
 
-func _init(resolution: Vector2i = Vector2i(128, 128)) -> void:
+func _init(resolution: Vector2i = Vector2i(32, 32), grid_manager = null) -> void:
 	grid_resolution = resolution
+	_grid_manager = grid_manager
 	_initialize_bitmaps()
 
 
 ## ビットマップを初期化
 func _initialize_bitmaps() -> void:
-	# 128x128 = 16384ビット = 2048バイト
-	var byte_count := (grid_resolution.x * grid_resolution.y) / 8
+	# ビット数 / 8 = バイト数
+	var byte_count := (grid_resolution.x * grid_resolution.y + 7) / 8
 	_current_bitmap.resize(byte_count)
 	_previous_bitmap.resize(byte_count)
 	_current_bitmap.fill(0)
 	_previous_bitmap.fill(0)
-
-
-## マップ範囲を設定
-func set_map_bounds(min_pos: Vector2, max_pos: Vector2) -> void:
-	map_min = min_pos
-	map_max = max_pos
 
 
 ## ImageからビットマップにLを変換
@@ -97,23 +92,19 @@ func is_cell_visible(x: int, y: int) -> bool:
 	return _get_bit(_current_bitmap, x, y)
 
 
-## ワールド座標が可視かどうか
+## ワールド座標が可視かどうか（GridManager使用）
 func is_position_visible(world_pos: Vector3) -> bool:
-	var grid_pos := _world_to_grid(Vector2(world_pos.x, world_pos.z))
-	if grid_pos.x < 0 or grid_pos.x >= grid_resolution.x:
+	if not _grid_manager:
 		return false
-	if grid_pos.y < 0 or grid_pos.y >= grid_resolution.y:
+
+	var cell: Vector2i = _grid_manager.world_to_cell(world_pos)
+
+	if cell.x < 0 or cell.x >= grid_resolution.x:
 		return false
-	return is_cell_visible(grid_pos.x, grid_pos.y)
+	if cell.y < 0 or cell.y >= grid_resolution.y:
+		return false
 
-
-## ワールド座標をグリッド座標に変換
-func _world_to_grid(world_pos: Vector2) -> Vector2i:
-	var normalized := (world_pos - map_min) / (map_max - map_min)
-	return Vector2i(
-		clampi(int(normalized.x * float(grid_resolution.x)), 0, grid_resolution.x - 1),
-		clampi(int(normalized.y * float(grid_resolution.y)), 0, grid_resolution.y - 1)
-	)
+	return is_cell_visible(cell.x, cell.y)
 
 
 # =============================================================================

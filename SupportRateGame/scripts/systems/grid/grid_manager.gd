@@ -353,3 +353,126 @@ func get_debug_info() -> Dictionary:
 		"blocked_cells": grid_width * grid_height - walkable_count,
 		"initialized": _initialized
 	}
+
+
+# =============================================================================
+# Fog of War / 視線判定 API
+# =============================================================================
+
+## 2つのセル間に視線が通るか判定（Bresenham's line algorithm）
+## 壁セルがある場合はfalseを返す
+func has_line_of_sight(from_cell: Vector2i, to_cell: Vector2i) -> bool:
+	var dx := absi(to_cell.x - from_cell.x)
+	var dy := absi(to_cell.y - from_cell.y)
+	var sx := 1 if from_cell.x < to_cell.x else -1
+	var sy := 1 if from_cell.y < to_cell.y else -1
+	var err := dx - dy
+
+	var x := from_cell.x
+	var y := from_cell.y
+
+	while true:
+		# 現在のセルが壁なら視線は遮られる（開始セルは除く）
+		if Vector2i(x, y) != from_cell and not is_walkable(Vector2i(x, y)):
+			return false
+
+		if x == to_cell.x and y == to_cell.y:
+			break
+
+		var e2 := 2 * err
+		if e2 > -dy:
+			err -= dy
+			x += sx
+		if e2 < dx:
+			err += dx
+			y += sy
+
+	return true
+
+
+## FOV内の全セルを取得（視線が通るセルのみ）
+## origin_cell: 視野の原点セル
+## forward_dir: 視野の向き（正規化された2D方向ベクトル）
+## fov_angle: 視野角（度）
+## view_distance_cells: 視野距離（セル数）
+func get_visible_cells_in_fov(origin_cell: Vector2i, forward_dir: Vector2, fov_angle: float, view_distance_cells: int) -> Array[Vector2i]:
+	var visible_cells: Array[Vector2i] = []
+	var half_fov := deg_to_rad(fov_angle / 2.0)
+	var forward_angle := atan2(forward_dir.y, forward_dir.x)
+
+	# 視野距離の二乗（距離計算用）
+	var dist_sq := view_distance_cells * view_distance_cells
+
+	# 範囲内の全セルをチェック
+	for dy in range(-view_distance_cells, view_distance_cells + 1):
+		for dx in range(-view_distance_cells, view_distance_cells + 1):
+			var check_cell := Vector2i(origin_cell.x + dx, origin_cell.y + dy)
+
+			# 有効範囲チェック
+			if not is_valid_cell(check_cell):
+				continue
+
+			# 距離チェック（円形範囲）
+			if dx * dx + dy * dy > dist_sq:
+				continue
+
+			# 原点セルは常に可視
+			if dx == 0 and dy == 0:
+				visible_cells.append(check_cell)
+				continue
+
+			# FOV角度チェック
+			var to_cell := Vector2(float(dx), float(dy)).normalized()
+			var angle_to_cell := atan2(to_cell.y, to_cell.x)
+			var angle_diff := _angle_diff(angle_to_cell, forward_angle)
+
+			if absf(angle_diff) > half_fov:
+				continue
+
+			# LOS（視線）チェック
+			if has_line_of_sight(origin_cell, check_cell):
+				visible_cells.append(check_cell)
+
+	return visible_cells
+
+
+## 全方位の可視セルを取得（FOV無制限）
+func get_visible_cells_360(origin_cell: Vector2i, view_distance_cells: int) -> Array[Vector2i]:
+	var visible_cells: Array[Vector2i] = []
+	var dist_sq := view_distance_cells * view_distance_cells
+
+	for dy in range(-view_distance_cells, view_distance_cells + 1):
+		for dx in range(-view_distance_cells, view_distance_cells + 1):
+			var check_cell := Vector2i(origin_cell.x + dx, origin_cell.y + dy)
+
+			if not is_valid_cell(check_cell):
+				continue
+
+			if dx * dx + dy * dy > dist_sq:
+				continue
+
+			if dx == 0 and dy == 0:
+				visible_cells.append(check_cell)
+				continue
+
+			if has_line_of_sight(origin_cell, check_cell):
+				visible_cells.append(check_cell)
+
+	return visible_cells
+
+
+## 角度差を計算（-PI～PIに正規化）
+func _angle_diff(a: float, b: float) -> float:
+	var diff := a - b
+	while diff > PI:
+		diff -= TAU
+	while diff < -PI:
+		diff += TAU
+	return diff
+
+
+## ワールド座標からセル座標に変換（FOV用、小数点を考慮）
+func world_to_cell_float(world_pos: Vector3) -> Vector2:
+	var local_x := (world_pos.x - grid_origin.x) / cell_size
+	var local_z := (world_pos.z - grid_origin.z) / cell_size
+	return Vector2(local_x, local_z)
