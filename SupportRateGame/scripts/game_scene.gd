@@ -133,6 +133,17 @@ func _on_squad_player_selected(player_data: RefCounted, _index: int) -> void:
 	print("[GameScene] Player selected via SquadManager: %s" % selected_player.name)
 
 
+## WallCollisionGeneratorからのコリジョン生成完了通知
+func _on_wall_collisions_generated(count: int) -> void:
+	print("[GameScene] Wall collisions generated: %d meshes" % count)
+	if grid_manager and count > 0:
+		# 物理エンジンへの登録を待ってから再スキャン
+		await get_tree().physics_frame
+		await get_tree().physics_frame  # 念のため2フレーム待つ
+		grid_manager.rescan_obstacles()
+		print("[GameScene] GridManager rescanned obstacles")
+
+
 func _exit_tree() -> void:
 	# シーン終了時にクリーンアップ
 	if network_sync_manager:
@@ -269,6 +280,11 @@ func _setup_grid_system() -> void:
 	# GameManagerに登録
 	if GameManager:
 		GameManager.grid_manager = grid_manager
+
+	# WallCollisionGeneratorのシグナルに接続（コリジョン生成後に再スキャン）
+	var wall_node = get_node_or_null("Wall")
+	if wall_node and wall_node.has_signal("collisions_generated"):
+		wall_node.collisions_generated.connect(_on_wall_collisions_generated)
 
 	print("[GameScene] GridManager initialized (16x16 grid)")
 

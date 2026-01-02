@@ -72,6 +72,14 @@ func _scan_obstacles() -> void:
 	print("[GridManager] Scanned obstacles: %d cells blocked" % obstacle_count)
 
 
+## 障害物を再スキャン（コリジョン動的追加後に呼び出し）
+func rescan_obstacles() -> void:
+	# グリッドをリセット
+	_walkable.fill(1)
+	# 再スキャン
+	_scan_obstacles()
+
+
 ## ワールド座標をセル座標に変換
 func world_to_cell(world_pos: Vector3) -> Vector2i:
 	var local_x := (world_pos.x - grid_origin.x) / cell_size
