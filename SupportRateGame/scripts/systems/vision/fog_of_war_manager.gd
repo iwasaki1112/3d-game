@@ -1,7 +1,7 @@
 class_name FogOfWarManagerNode
 extends Node
 
-## 視界マネージャー（シーンノード）
+## 視界マネージャー（シーンノード、グリッドベース版）
 ## 視界システム全体を管理し、敵の可視性を制御
 ## ゲームシーン内に配置して使用（Autoloadではない）
 
@@ -14,8 +14,8 @@ var vision_components: Array = []  # Array of VisionComponent
 # コンポーネントごとのコールバックを保存（disconnect用）
 var _component_callbacks: Dictionary = {}  # key: VisionComponent, value: Callable
 
-# 現在の視野ポリゴン（全味方の視野を結合）
-var current_visible_points: Array = []  # Array of Vector3
+# 現在の可視セル（全味方の視野を結合）
+var current_visible_cells: Array[Vector2i] = []
 
 # 敵の可視性状態
 var enemy_visibility: Dictionary = {}  # key: CharacterBody3D, value: bool
@@ -112,20 +112,23 @@ func unregister_vision_component(component: Node) -> void:
 
 
 ## 視野が更新されたときのコールバック
-func _on_visibility_changed(_visible_points: Array, _component: Node) -> void:
+func _on_visibility_changed(_visible_cells: Array, _component: Node) -> void:
 	_update_combined_visibility()
 	_update_enemy_visibility()
 	fog_updated.emit()
 
 
-## 全味方の視野を結合
+## 全味方の視野を結合（グリッドベース）
 func _update_combined_visibility() -> void:
-	current_visible_points.clear()
+	current_visible_cells.clear()
 
 	for component in vision_components:
 		if component and component.character:
-			for point in component.visible_points:
-				current_visible_points.append(point)
+			# visible_cellsプロパティを使用
+			if "visible_cells" in component:
+				for cell in component.visible_cells:
+					if cell not in current_visible_cells:
+						current_visible_cells.append(cell)
 
 
 ## 指定位置が現在視野内かどうか
@@ -192,7 +195,7 @@ func set_enemy_visibility(enemy: CharacterBody3D, is_visible: bool) -> void:
 ## 視界をリセット（ラウンド開始時など）
 func reset_visibility() -> void:
 	enemy_visibility.clear()
-	current_visible_points.clear()
+	current_visible_cells.clear()
 	_enemies_cache_dirty = true  # キャッシュを更新
 
 	# 全敵を非表示にする（キャッシュから取得）
@@ -212,6 +215,6 @@ func set_fog_renderer(renderer: Node3D) -> void:
 			fog_renderer.register_vision_component(component)
 
 
-## 現在の視野ポイントを取得
-func get_current_visible_points() -> Array:
-	return current_visible_points
+## 現在の可視セルを取得
+func get_current_visible_cells() -> Array[Vector2i]:
+	return current_visible_cells

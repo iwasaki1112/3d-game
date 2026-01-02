@@ -136,6 +136,16 @@ func unregister_fog_of_war_manager() -> void:
 	fog_of_war_manager = null
 
 
+## GridManagerを登録
+func register_grid_manager(manager: Node) -> void:
+	grid_manager = manager
+
+
+## GridManagerを解除
+func unregister_grid_manager() -> void:
+	grid_manager = null
+
+
 ## ゲームを開始（MatchManagerに委譲）
 func start_game(mode: GameMode = GameMode.DEFUSE) -> void:
 	current_mode = mode

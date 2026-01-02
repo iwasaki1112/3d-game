@@ -151,6 +151,7 @@ func _exit_tree() -> void:
 	GameManager.unregister_match_manager()
 	GameManager.unregister_squad_manager()
 	GameManager.unregister_fog_of_war_manager()
+	GameManager.unregister_grid_manager()
 	GameManager.stop_game()
 	# 敵はグループで管理されるため、シーン離脱時に自動クリーンアップ
 
@@ -278,8 +279,7 @@ func _setup_grid_system() -> void:
 	add_child(grid_manager)
 
 	# GameManagerに登録
-	if GameManager:
-		GameManager.grid_manager = grid_manager
+	GameManager.register_grid_manager(grid_manager)
 
 	# WallCollisionGeneratorのシグナルに接続（コリジョン生成後に再スキャン）
 	var wall_node = get_node_or_null("Wall")
@@ -370,9 +370,7 @@ func _setup_fog_of_war_renderer() -> void:
 	fog_renderer = FogOfWarRendererScene.instantiate()
 	add_child(fog_renderer)
 
-	# マップ範囲を設定（dust3マップ用）
-	# 必要に応じて調整
-	fog_renderer.set_map_bounds(Vector3(0, 0, 0), Vector2(80, 80))
+	# マップ範囲はGridManagerから自動取得される
 
 	# 敵の初期可視性を設定（非表示から開始）
 	_initialize_enemy_fog_of_war.call_deferred()
