@@ -589,6 +589,10 @@ func _apply_spawn_positions_from_map(my_team: Array[CharacterBody3D], enemy_team
 	var ct_spawns: Array[Node3D] = []
 	var t_spawns: Array[Node3D] = []
 
+	# デバッグ: map_nodeの全子ノード名を出力
+	print("[GameScene] map_node children:")
+	_debug_print_children(map_node, 0)
+
 	# CTRespone* と TRespone* ノードを検索（GLBからインポートされたEmpty）
 	for child in map_node.get_children():
 		_find_spawn_points_recursive(child, ct_spawns, t_spawns)
@@ -629,6 +633,14 @@ func _apply_spawn_positions_from_map(my_team: Array[CharacterBody3D], enemy_team
 		# Blenderからの回転を適用
 		enemy_team[i].rotation.y = spawn.rotation.y
 		print("[GameScene] Spawned %s at %s, rot=%.1f" % [enemy_team[i].name, spawn_pos, rad_to_deg(spawn.rotation.y)])
+
+
+## デバッグ: 子ノードを再帰的に出力
+func _debug_print_children(node: Node, depth: int) -> void:
+	var indent = "  ".repeat(depth)
+	print("%s- %s (%s)" % [indent, node.name, node.get_class()])
+	for child in node.get_children():
+		_debug_print_children(child, depth + 1)
 
 
 ## スポーンポイントを再帰的に検索

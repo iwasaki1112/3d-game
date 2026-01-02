@@ -2,21 +2,21 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dxxqn3n6x21sw"
-path.s3tc="res://.godot/imported/dust3_Image_29.png-b4bb9093e83da6c0d21f1f9526003f20.s3tc.ctex"
-path.etc2="res://.godot/imported/dust3_Image_29.png-b4bb9093e83da6c0d21f1f9526003f20.etc2.ctex"
+uid="uid://dcram2bb6m202"
+path.s3tc="res://.godot/imported/map_map_grid_floor_texture.png-b74dc439605daef40986b99c74ccbc6e.s3tc.ctex"
+path.etc2="res://.godot/imported/map_map_grid_floor_texture.png-b74dc439605daef40986b99c74ccbc6e.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
-"md5": "8cf4f5e27291d1568c4a5701ea0cb38f"
+"md5": "0f7c164b64ae586f8789aebca96b8b13"
 }
 
 [deps]
 
-source_file="res://resources/maps/dust3/dust3_Image_29.png"
-dest_files=["res://.godot/imported/dust3_Image_29.png-b4bb9093e83da6c0d21f1f9526003f20.s3tc.ctex", "res://.godot/imported/dust3_Image_29.png-b4bb9093e83da6c0d21f1f9526003f20.etc2.ctex"]
+source_file="res://resources/maps/map_map_grid_floor_texture.png"
+dest_files=["res://.godot/imported/map_map_grid_floor_texture.png-b74dc439605daef40986b99c74ccbc6e.s3tc.ctex", "res://.godot/imported/map_map_grid_floor_texture.png-b74dc439605daef40986b99c74ccbc6e.etc2.ctex"]
 
 [params]
 
