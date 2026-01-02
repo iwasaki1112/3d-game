@@ -3,5 +3,7 @@
 [ext_resource type="Texture2D" path="res://resources/maps/grid_floor_texture.png" id="1_texture"]
 
 [resource]
+render_priority = -1
 albedo_texture = ExtResource("1_texture")
+texture_filter = 4
 uv1_scale = Vector3(1, 1, 1)

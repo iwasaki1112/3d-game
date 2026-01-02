@@ -18,7 +18,7 @@ const GridManagerClass = preload("res://scripts/systems/grid/grid_manager.gd")
 @onready var ct_node: Node3D = $CT
 @onready var t_node: Node3D = $T
 @onready var game_ui: CanvasLayer = $GameUI
-@onready var map_node: Node3D = null  # grid_testマップはスポーンポイントを使用しない
+@onready var map_node: Node3D = $Wall/MapModel  # Blenderからエクスポートしたマップ（スポーンポイント含む）
 
 var enemies: Array[CharacterBody3D] = []
 
@@ -350,6 +350,10 @@ func _setup_camera_system() -> void:
 		player_camera.fov = 45.0
 		print("[GameScene] Created new camera for player without Camera3D")
 
+	# Zファイティング対策: nearプレーンを調整
+	player_camera.near = 0.1
+	player_camera.far = 100.0
+
 	camera_controller = CameraControllerScene.instantiate()
 	add_child(camera_controller)
 
@@ -605,27 +609,34 @@ func _apply_spawn_positions_from_map(my_team: Array[CharacterBody3D], enemy_team
 		my_team_spawns = ct_spawns
 		enemy_team_spawns = t_spawns
 
-	# 自チームの位置を設定
+	# 自チームの位置と向きを設定
 	for i in range(min(my_team.size(), my_team_spawns.size())):
-		var spawn_pos = my_team_spawns[i].global_position
+		var spawn = my_team_spawns[i]
+		var spawn_pos = spawn.global_position
 		# Y座標は地面から少し上に（キャラクターの高さを考慮）
 		spawn_pos.y = 1.0
 		my_team[i].global_position = spawn_pos
-		print("[GameScene] Spawned %s at %s" % [my_team[i].name, spawn_pos])
+		# Blenderからの回転を適用（BlenderのZ回転 → GodotのY回転）
+		my_team[i].rotation.y = spawn.rotation.y
+		print("[GameScene] Spawned %s at %s, rot=%.1f" % [my_team[i].name, spawn_pos, rad_to_deg(spawn.rotation.y)])
 
-	# 敵チームの位置を設定
+	# 敵チームの位置と向きを設定
 	for i in range(min(enemy_team.size(), enemy_team_spawns.size())):
-		var spawn_pos = enemy_team_spawns[i].global_position
+		var spawn = enemy_team_spawns[i]
+		var spawn_pos = spawn.global_position
 		spawn_pos.y = 1.0
 		enemy_team[i].global_position = spawn_pos
-		print("[GameScene] Spawned %s at %s" % [enemy_team[i].name, spawn_pos])
+		# Blenderからの回転を適用
+		enemy_team[i].rotation.y = spawn.rotation.y
+		print("[GameScene] Spawned %s at %s, rot=%.1f" % [enemy_team[i].name, spawn_pos, rad_to_deg(spawn.rotation.y)])
 
 
 ## スポーンポイントを再帰的に検索
+## Blenderからエクスポートした命名規則: ResponseCT1, ResponseCT2, ResponseT1, ResponseT2, etc.
 func _find_spawn_points_recursive(node: Node, ct_spawns: Array[Node3D], t_spawns: Array[Node3D]) -> void:
-	if node.name.begins_with("CTRespone"):
+	if node.name.begins_with("ResponseCT"):
 		ct_spawns.append(node as Node3D)
-	elif node.name.begins_with("TRespone"):
+	elif node.name.begins_with("ResponseT"):
 		t_spawns.append(node as Node3D)
 
 	for child in node.get_children():

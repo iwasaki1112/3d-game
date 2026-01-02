@@ -10,7 +10,8 @@ const VisibilityGridSyncClass = preload("res://scripts/systems/vision/visibility
 
 @export_group("表示設定")
 @export var fog_color: Color = Color(0.1, 0.15, 0.25, 0.9)  # 青みがかった暗い色
-@export var fog_height: float = 0.02  # 地面からの高さ（Z-fighting対策で低く設定）
+@export var fog_height: float = 0.15  # 地面からの高さ（Z-fighting対策）
+@export var fog_enabled: bool = false  # デバッグ: 一時的に無効化
 
 @export_group("テクスチャ設定")
 ## テンポラル補間係数（0-1）
@@ -84,6 +85,9 @@ func _deferred_init() -> void:
 
 	# メッシュを構築
 	_build_fog_mesh()
+
+	# デバッグ: fog_enabledで表示切り替え
+	fog_mesh_instance.visible = fog_enabled
 
 	# FogOfWarManagerに登録
 	var fow = _get_fog_of_war_manager()
