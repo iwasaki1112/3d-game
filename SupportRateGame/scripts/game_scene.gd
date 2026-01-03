@@ -45,6 +45,12 @@ const INTERPOLATION_SPEED: float = 15.0  # 補間速度
 
 
 func _ready() -> void:
+	# マップメッシュに影設定を適用
+	_setup_map_shadows()
+
+	# 影を受ける床を作成（map.glbの法線問題を回避）
+	_create_shadow_receiving_floor()
+
 	# システムノードを初期化（順序重要）
 	_setup_squad_manager()
 	_setup_fog_of_war_manager()
@@ -269,6 +275,54 @@ func _setup_match_manager() -> void:
 	print("[GameScene] MatchManager initialized")
 
 
+## マップメッシュに影設定を適用
+func _setup_map_shadows() -> void:
+	if not map_node:
+		print("[GameScene] Map node not found, skipping shadow setup")
+		return
+
+	var mesh_count := _apply_shadow_settings_recursive(map_node, 0)
+	print("[GameScene] Shadow settings applied to %d map meshes" % mesh_count)
+
+
+## 床のコリジョンを確実に配置（map.glbの床は表示したまま）
+func _create_shadow_receiving_floor() -> void:
+	# 追加の床コリジョンを作成（厚みを持たせる）
+	# Blender Y → Godot -Z の座標変換を考慮して負のZ領域に配置
+	var floor_collision := StaticBody3D.new()
+	floor_collision.name = "DynamicFloorCollision"
+	floor_collision.collision_layer = 2  # 地形レイヤー
+	floor_collision.collision_mask = 0
+
+	var collision_shape := CollisionShape3D.new()
+	var box_shape := BoxShape3D.new()
+	box_shape.size = Vector3(16, 1.0, 16)  # 厚みを1.0に増加
+	collision_shape.shape = box_shape
+
+	floor_collision.add_child(collision_shape)
+	# スポーン位置は Z=-14.5〜-2.5 なので、中心を Z=-8 に配置
+	floor_collision.position = Vector3(8, -0.5, -8)
+
+	add_child(floor_collision)
+	print("[GameScene] Dynamic floor collision created at %s (size: 16x1x16)" % floor_collision.position)
+
+
+## 再帰的にメッシュに影設定を適用
+## Blenderで法線を修正済みなので、cast_shadowの設定のみ行う
+func _apply_shadow_settings_recursive(node: Node, count: int) -> int:
+	if node is MeshInstance3D:
+		var mesh_instance := node as MeshInstance3D
+		# 影を投げる・受ける設定
+		mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		count += 1
+		print("[GameScene] Shadow setup for mesh: %s (cast_shadow=%d)" % [mesh_instance.name, mesh_instance.cast_shadow])
+
+	for child in node.get_children():
+		count = _apply_shadow_settings_recursive(child, count)
+
+	return count
+
+
 ## GridManagerをセットアップ（A*パスファインディング用）
 func _setup_grid_system() -> void:
 	grid_manager = Node3D.new()
@@ -276,7 +330,8 @@ func _setup_grid_system() -> void:
 	grid_manager.set_script(GridManagerScript)
 
 	# grid_testマップ用の設定（16x16グリッド）
-	grid_manager.grid_origin = Vector3(0, 0, 0)
+	# Blender Y → Godot -Z の座標変換により、マップはZ=-16〜0の範囲
+	grid_manager.grid_origin = Vector3(0, 0, -16)
 	grid_manager.grid_width = 16
 	grid_manager.grid_height = 16
 	grid_manager.cell_size = 1.0
@@ -628,12 +683,13 @@ func _apply_spawn_positions_from_map(my_team: Array[CharacterBody3D], enemy_team
 		# Y座標は地面から少し上に（キャラクターの高さを考慮）
 		spawn_pos.y = 1.0
 		my_team[i].global_position = spawn_pos
-		# Blenderからの回転を適用（BlenderのZ回転 → GodotのY回転）
-		my_team[i].rotation.y = spawn.rotation.y
+		# Blenderからの回転を適用（BlenderのY前方 → Godotの-Z前方のため180度オフセット）
+		var adjusted_rot = spawn.rotation.y + PI
+		my_team[i].rotation.y = adjusted_rot
 		# 初期武器を設定（AK47）
 		if my_team[i].has_method("set_weapon"):
 			my_team[i].set_weapon(CharacterSetup.WeaponId.AK47)
-		print("[GameScene] Spawned %s at %s, rot=%.1f" % [my_team[i].name, spawn_pos, rad_to_deg(spawn.rotation.y)])
+		print("[GameScene] Spawned %s at %s, rot=%.1f" % [my_team[i].name, spawn_pos, rad_to_deg(adjusted_rot)])
 
 	# 敵チームの位置と向きを設定
 	for i in range(min(enemy_team.size(), enemy_team_spawns.size())):
@@ -641,12 +697,13 @@ func _apply_spawn_positions_from_map(my_team: Array[CharacterBody3D], enemy_team
 		var spawn_pos = spawn.global_position
 		spawn_pos.y = 1.0
 		enemy_team[i].global_position = spawn_pos
-		# Blenderからの回転を適用
-		enemy_team[i].rotation.y = spawn.rotation.y
+		# Blenderからの回転を適用（BlenderのY前方 → Godotの-Z前方のため180度オフセット）
+		var adjusted_rot = spawn.rotation.y + PI
+		enemy_team[i].rotation.y = adjusted_rot
 		# 初期武器を設定（AK47）
 		if enemy_team[i].has_method("set_weapon"):
 			enemy_team[i].set_weapon(CharacterSetup.WeaponId.AK47)
-		print("[GameScene] Spawned %s at %s, rot=%.1f" % [enemy_team[i].name, spawn_pos, rad_to_deg(spawn.rotation.y)])
+		print("[GameScene] Spawned %s at %s, rot=%.1f" % [enemy_team[i].name, spawn_pos, rad_to_deg(adjusted_rot)])
 
 
 ## スポーンポイントを再帰的に検索

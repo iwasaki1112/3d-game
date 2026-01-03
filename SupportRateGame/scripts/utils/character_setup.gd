@@ -140,6 +140,75 @@ const WEAPON_SPEED_MODIFIER := {
 	WeaponType.RIFLE: 0.75
 }
 
+## アニメーション状態の定義
+enum AnimState { IDLE, WALKING, RUNNING, FIRE }
+
+## アニメーション状態名からAnimState enumに変換するマップ
+const ANIM_STATE_MAP := {
+	"idle": AnimState.IDLE,
+	"walking": AnimState.WALKING,
+	"running": AnimState.RUNNING,
+	"fire": AnimState.FIRE,
+	"shoot": AnimState.FIRE,  # shootもfireとして扱う
+	"idle_aiming": AnimState.FIRE  # idle_aimingもfireとして扱う
+}
+
+## 武器のアニメーションごとの位置・回転オフセット
+## 構造: { WeaponId: { AnimState: { "position": Vector3, "rotation": Vector3 (degrees) } } }
+## 値を変更する場合はこの定数を直接編集してください
+## 注意: rotation はオイラー角（度数法）で指定し、内部でラジアンに変換
+const WEAPON_ANIMATION_OFFSETS := {
+	WeaponId.AK47: {
+		AnimState.IDLE: {
+			"position": Vector3(0.0, 0.0, 0.0),
+			"rotation": Vector3(0.0, 0.0, 0.0)
+		},
+		AnimState.WALKING: {
+			"position": Vector3(0.0, 0.0, 0.0),
+			"rotation": Vector3(0.0, 0.0, 0.0)
+		},
+		AnimState.RUNNING: {
+			"position": Vector3(0.0, 0.0, 0.0),
+			"rotation": Vector3(0.0, 0.0, 0.0)
+		},
+		AnimState.FIRE: {
+			"position": Vector3(0.0, 0.0, 0.0),
+			"rotation": Vector3(0.0, 0.0, 0.0)
+		}
+	},
+	WeaponId.USP: {
+		AnimState.IDLE: {
+			"position": Vector3(0.0, 0.0, 0.0),
+			"rotation": Vector3(0.0, 0.0, 0.0)
+		},
+		AnimState.WALKING: {
+			"position": Vector3(0.0, 0.0, 0.0),
+			"rotation": Vector3(0.0, 0.0, 0.0)
+		},
+		AnimState.RUNNING: {
+			"position": Vector3(0.0, 0.0, 0.0),
+			"rotation": Vector3(0.0, 0.0, 0.0)
+		},
+		AnimState.FIRE: {
+			"position": Vector3(0.0, 0.0, 0.0),
+			"rotation": Vector3(0.0, 0.0, 0.0)
+		}
+	}
+}
+
+## 武器のベース位置・回転（ak47.tscn内のModelトランスフォームからコピー）
+## これにアニメーションオフセットが加算される
+const WEAPON_BASE_TRANSFORM := {
+	WeaponId.AK47: {
+		"position": Vector3(-0.03, 0.13, 0.02),
+		"rotation": Vector3(-6.13, 56.77, 3.96)  # 度数法
+	},
+	WeaponId.USP: {
+		"position": Vector3(0.0, 0.0, 0.0),
+		"rotation": Vector3(0.0, 0.0, 0.0)
+	}
+}
+
 ## アニメーションのHips Y位置の目標値（全武器タイプで統一）
 ## この値にHips Yを正規化することで、武器タイプ切替時の位置ズレを防ぐ
 const ANIMATION_HIPS_TARGET_Y: float = 0.0
@@ -518,6 +587,94 @@ static func attach_weapon_to_character(character: Node, skeleton: Skeleton3D, we
 	
 	bone_attachment.queue_free()
 	return null
+
+
+## アニメーション状態に応じて武器の位置・回転を更新
+## @param weapon_attachment: attach_weapon_to_characterで返されたBoneAttachment3D
+## @param weapon_id: 武器ID
+## @param anim_state: アニメーション状態（AnimState enum）
+## @param debug_name: デバッグ用キャラクター名
+static func update_weapon_position(weapon_attachment: Node3D, weapon_id: int, anim_state: int, debug_name: String = "") -> void:
+	if weapon_attachment == null:
+		return
+
+	# 武器モデル（BoneAttachment3Dの子ノード）を取得
+	var weapon_node: Node3D = null
+	for child in weapon_attachment.get_children():
+		if child is Node3D:
+			weapon_node = child as Node3D
+			break
+
+	if weapon_node == null:
+		return
+
+	# 武器内のModelノードを取得
+	var model_node: Node3D = weapon_node.get_node_or_null("Model")
+	if model_node == null:
+		# Modelノードがない場合は武器ノード自体を使用
+		model_node = weapon_node
+
+	# ベース位置・回転を取得
+	var base_pos := Vector3.ZERO
+	var base_rot := Vector3.ZERO
+	if WEAPON_BASE_TRANSFORM.has(weapon_id):
+		var base_data: Dictionary = WEAPON_BASE_TRANSFORM[weapon_id]
+		base_pos = base_data.get("position", Vector3.ZERO)
+		base_rot = base_data.get("rotation", Vector3.ZERO)
+
+	# アニメーションオフセットを取得
+	var offset_pos := Vector3.ZERO
+	var offset_rot := Vector3.ZERO
+	if WEAPON_ANIMATION_OFFSETS.has(weapon_id):
+		var weapon_offsets: Dictionary = WEAPON_ANIMATION_OFFSETS[weapon_id]
+		if weapon_offsets.has(anim_state):
+			var offset_data: Dictionary = weapon_offsets[anim_state]
+			offset_pos = offset_data.get("position", Vector3.ZERO)
+			offset_rot = offset_data.get("rotation", Vector3.ZERO)
+
+	# 最終的な位置・回転を計算
+	var final_pos := base_pos + offset_pos
+	var final_rot := base_rot + offset_rot
+
+	# 適用
+	model_node.position = final_pos
+	model_node.rotation_degrees = final_rot
+
+	if debug_name and (offset_pos != Vector3.ZERO or offset_rot != Vector3.ZERO):
+		print("[CharacterSetup] %s: Weapon position updated - state=%d, offset=(%s, %s)" % [
+			debug_name, anim_state, offset_pos, offset_rot
+		])
+
+
+## アニメーション名からアニメーション状態を取得
+## @param anim_name: アニメーション名（例: "idle_rifle", "walking_none"）
+## @return: AnimState enum値（見つからない場合はAnimState.IDLE）
+static func get_anim_state_from_name(anim_name: String) -> int:
+	# アニメーション名からベース名を抽出（例: "idle_rifle" -> "idle"）
+	var parts := anim_name.split("_")
+	if parts.size() > 0:
+		var base_name := parts[0]
+		if ANIM_STATE_MAP.has(base_name):
+			return ANIM_STATE_MAP[base_name]
+	return AnimState.IDLE
+
+
+## move_stateからAnimState enumに変換
+## @param move_state: 0=idle, 1=walk, 2=run
+## @param is_shooting: 射撃中かどうか
+## @return: AnimState enum値
+static func get_anim_state_from_move_state(move_state: int, is_shooting: bool = false) -> int:
+	if is_shooting:
+		return AnimState.FIRE
+	match move_state:
+		0:
+			return AnimState.IDLE
+		1:
+			return AnimState.WALKING
+		2:
+			return AnimState.RUNNING
+		_:
+			return AnimState.IDLE
 
 
 ## ノードツリーをデバッグ出力
