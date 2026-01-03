@@ -252,7 +252,11 @@ func _update_shooting_blend(delta: float) -> void:
 
 ## 射撃状態を設定（CombatComponentから呼ばれる）
 func set_shooting(shooting: bool) -> void:
+	if is_shooting == shooting:
+		return
 	is_shooting = shooting
+	# 武器位置を更新（射撃状態に応じて位置が変わる場合があるため）
+	_update_weapon_position()
 
 
 ## パス追従移動
@@ -411,6 +415,18 @@ func _play_current_animation() -> void:
 			anim_player.play(anim_name, ANIM_BLEND_TIME)
 		print("[%s] Playing animation: %s" % [name, anim_name])
 
+	# 武器位置を更新
+	_update_weapon_position()
+
+
+## 武器の位置をアニメーション状態に応じて更新
+func _update_weapon_position() -> void:
+	if weapon_attachment == null or current_weapon_id == CharacterSetup.WeaponId.NONE:
+		return
+
+	var anim_state := CharacterSetup.get_anim_state_from_move_state(current_move_state, is_shooting)
+	CharacterSetup.update_weapon_position(weapon_attachment, current_weapon_id, anim_state, name)
+
 
 ## ダメージを受ける
 ## @param amount: ダメージ量
@@ -564,17 +580,19 @@ func get_weapon_type_name() -> String:
 func set_weapon(weapon_id: int) -> void:
 	if current_weapon_id == weapon_id:
 		return
-	
+
 	current_weapon_id = weapon_id
-	
+
 	# 武器タイプを更新（アニメーション用）
 	var weapon_type = CharacterSetup.get_weapon_type_from_id(weapon_id)
 	set_weapon_type(weapon_type)
-	
+
 	# 武器モデルを装着
 	if skeleton:
 		weapon_attachment = CharacterSetup.attach_weapon_to_character(self, skeleton, weapon_id, name)
-	
+		# 武器位置を現在のアニメーション状態に合わせて更新
+		_update_weapon_position()
+
 	weapon_changed.emit(weapon_id)
 
 	# CombatComponentに武器変更を通知
