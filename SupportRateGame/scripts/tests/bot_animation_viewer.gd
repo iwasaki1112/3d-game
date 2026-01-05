@@ -246,10 +246,14 @@ func _collect_animations() -> void:
 		return
 
 	_animations.clear()
+	print("[BotViewer] Animation details:")
 	for anim_name in anim_player.get_animation_list():
 		if anim_name == "RESET":
 			continue
 		_animations.append(anim_name)
+		var anim = anim_player.get_animation(anim_name)
+		if anim:
+			print("  - %s (loop_mode=%d, length=%.2fs)" % [anim_name, anim.loop_mode, anim.length])
 
 	_animations.sort()
 	print("[BotViewer] Animations: ", _animations)
@@ -431,6 +435,13 @@ func _play_animation(anim_name: String) -> void:
 		return
 
 	if anim_player.has_animation(anim_name):
+		# ループアニメーションのloop_modeを強制設定
+		var anim = anim_player.get_animation(anim_name)
+		if anim and anim_name in ["rifle_idle", "rifle_walk", "rifle_sprint", "rifle_crouch"]:
+			if anim.loop_mode != Animation.LOOP_LINEAR:
+				anim.loop_mode = Animation.LOOP_LINEAR
+				print("[BotViewer] Set loop_mode to LINEAR for: %s" % anim_name)
+
 		anim_player.play(anim_name, blend_time)
 		print("[BotViewer] Playing: %s (blend: %.2fs)" % [anim_name, blend_time])
 	else:
@@ -525,6 +536,13 @@ func _on_stop_walk_pressed() -> void:
 
 
 func _on_anim_finished(anim_name: String) -> void:
+	print("[BotViewer] animation_finished: %s (walk_state=%s)" % [anim_name, WalkState.keys()[walk_state]])
+
+	# アニメーションのloop_modeを確認
+	var anim = anim_player.get_animation(anim_name)
+	if anim:
+		print("[BotViewer]   -> loop_mode=%d, length=%.2fs" % [anim.loop_mode, anim.length])
+
 	if walk_state == WalkState.NONE:
 		return
 
@@ -548,6 +566,14 @@ func _on_anim_finished(anim_name: String) -> void:
 					anim_player.play("rifle_idle", blend_time)
 				print("[BotViewer] Walk sequence: END -> IDLE")
 				_update_walk_status()
+
+		WalkState.LOOP:
+			# ループアニメーションが終了した場合（loop_modeが効いていない場合）
+			# 再度再生する
+			if anim_name == loop_anim:
+				print("[BotViewer] WARNING: Loop animation finished unexpectedly, restarting...")
+				anim_player.play(loop_anim, 0.0)
+
 
 
 func _update_walk_status() -> void:

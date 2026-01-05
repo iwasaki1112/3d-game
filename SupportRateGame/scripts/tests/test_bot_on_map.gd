@@ -29,16 +29,21 @@ const WALK_SPEED: float = 3.0
 const RUN_SPEED: float = 6.0
 const ARRIVAL_THRESHOLD: float = 0.3
 const ROTATION_SPEED: float = 10.0  # 回転速度（ラジアン/秒）
-const SPEED_TRANSITION_RATE: float = 2.0  # 速度遷移レート（低いほどゆっくり）
 const ANIMATION_BLEND_TIME: float = 0.25  # アニメーションブレンド時間（秒）
 var current_speed: float = 0.0  # 現在の移動速度
+var target_speed: float = 0.0  # 目標移動速度
+var speed_transition_timer: float = 0.0  # 速度遷移タイマー
+var speed_transition_start: float = 0.0  # 速度遷移開始時の速度
+
+# アニメーション基準速度（アニメーションが自然に見える移動速度）
+const ANIM_WALK_BASE_SPEED: float = 3.0  # walkアニメーションの基準速度
+const ANIM_RUN_BASE_SPEED: float = 6.0   # sprintアニメーションの基準速度
 
 # スタック検出
 const STUCK_TIME_THRESHOLD: float = 0.5  # この時間進めなかったらスタックと判定
 const STUCK_DISTANCE_THRESHOLD: float = 0.1  # この距離以下の移動はスタックと判定
 var stuck_timer: float = 0.0
 var last_position: Vector3 = Vector3.ZERO
-
 
 func _ready() -> void:
 	_setup_bot()
@@ -154,6 +159,7 @@ func _setup_camera() -> void:
 
 func _process(delta: float) -> void:
 	_handle_camera_movement(delta)
+	_update_animation_speed()
 
 
 func _physics_process(delta: float) -> void:
@@ -206,7 +212,11 @@ func _on_path_confirmed(waypoints: Array) -> void:
 		# 最初のウェイポイントに応じて初期速度とアニメーションを設定
 		var first_waypoint = current_waypoints[0]
 		var should_run: bool = first_waypoint.get("run", false)
-		current_speed = RUN_SPEED if should_run else WALK_SPEED
+		# 速度を即座に設定（開始時は遷移なし）
+		target_speed = RUN_SPEED if should_run else WALK_SPEED
+		current_speed = target_speed
+		speed_transition_timer = ANIMATION_BLEND_TIME  # 遷移完了状態
+		speed_transition_start = target_speed
 		if should_run:
 			_play_run_animation()
 		else:
@@ -248,9 +258,21 @@ func _move_along_path(delta: float) -> void:
 		_advance_to_next_waypoint(should_run)
 		return
 
-	# 目標速度を決定し、スムーズに遷移
-	var target_speed := RUN_SPEED if should_run else WALK_SPEED
-	current_speed = lerp(current_speed, target_speed, SPEED_TRANSITION_RATE * delta)
+	# 目標速度を決定し、アニメーションブレンドと同じ時間で遷移
+	var new_target_speed := RUN_SPEED if should_run else WALK_SPEED
+	if new_target_speed != target_speed:
+		# 目標速度が変わったら遷移開始
+		speed_transition_start = current_speed
+		target_speed = new_target_speed
+		speed_transition_timer = 0.0
+
+	# 速度を線形補間（アニメーションブレンド時間と同期）
+	if speed_transition_timer < ANIMATION_BLEND_TIME:
+		speed_transition_timer += delta
+		var t := clampf(speed_transition_timer / ANIMATION_BLEND_TIME, 0.0, 1.0)
+		current_speed = lerpf(speed_transition_start, target_speed, t)
+	else:
+		current_speed = target_speed
 
 	# 向きをスムーズに更新
 	if direction.length() > 0.01:
@@ -311,38 +333,90 @@ func _on_path_complete() -> void:
 	current_waypoints.clear()
 	current_waypoint_index = 0
 	current_speed = 0.0
+	target_speed = 0.0
+	speed_transition_timer = 0.0
+	speed_transition_start = 0.0
 	bot.velocity.x = 0
 	bot.velocity.z = 0
 	_play_idle_animation()
 	print("[TestBotOnMap] Path complete")
 
 
+## アニメーション再生速度を移動速度に合わせて調整
+func _update_animation_speed() -> void:
+	if not anim_player or not is_moving:
+		if anim_player:
+			anim_player.speed_scale = 1.0
+		return
+
+	var current_anim = anim_player.current_animation
+	if current_anim.is_empty():
+		return
+
+	# 現在のアニメーションに応じて基準速度を決定
+	var base_speed: float = ANIM_WALK_BASE_SPEED
+	if current_anim == "rifle_sprint" or current_anim == "running":
+		base_speed = ANIM_RUN_BASE_SPEED
+	elif current_anim == "rifle_walk" or current_anim == "walking":
+		base_speed = ANIM_WALK_BASE_SPEED
+	else:
+		# idle等の場合は速度調整しない
+		anim_player.speed_scale = 1.0
+		return
+
+	# 移動速度に応じてアニメーション速度をスケール
+	if base_speed > 0:
+		var speed_scale = current_speed / base_speed
+		# 極端な値を防ぐためクランプ
+		anim_player.speed_scale = clampf(speed_scale, 0.5, 2.0)
+
+
+## アニメーションのloop_modeを強制設定
+func _ensure_loop_mode(anim_name: String) -> void:
+	if not anim_player:
+		return
+	var anim = anim_player.get_animation(anim_name)
+	if anim and anim.loop_mode != Animation.LOOP_LINEAR:
+		anim.loop_mode = Animation.LOOP_LINEAR
+		print("[TestBotOnMap] Set loop_mode to LINEAR for: %s" % anim_name)
+
+
 ## アイドルアニメーション再生
 func _play_idle_animation() -> void:
 	if anim_player and anim_player.has_animation("rifle_idle"):
-		anim_player.play("rifle_idle", ANIMATION_BLEND_TIME)
+		_ensure_loop_mode("rifle_idle")
+		if anim_player.current_animation != "rifle_idle":
+			anim_player.play("rifle_idle", ANIMATION_BLEND_TIME)
 
 
 ## 歩行アニメーション再生
 func _play_walk_animation() -> void:
 	if anim_player:
 		if anim_player.has_animation("rifle_walk"):
-			anim_player.play("rifle_walk", ANIMATION_BLEND_TIME)
+			_ensure_loop_mode("rifle_walk")
+			if anim_player.current_animation != "rifle_walk":
+				anim_player.play("rifle_walk", ANIMATION_BLEND_TIME)
 		elif anim_player.has_animation("walking"):
-			anim_player.play("walking", ANIMATION_BLEND_TIME)
+			_ensure_loop_mode("walking")
+			if anim_player.current_animation != "walking":
+				anim_player.play("walking", ANIMATION_BLEND_TIME)
 
 
 ## 走りアニメーション再生
 func _play_run_animation() -> void:
 	if anim_player:
 		if anim_player.has_animation("rifle_sprint"):
-			anim_player.play("rifle_sprint", ANIMATION_BLEND_TIME)
+			_ensure_loop_mode("rifle_sprint")
+			if anim_player.current_animation != "rifle_sprint":
+				anim_player.play("rifle_sprint", ANIMATION_BLEND_TIME)
 		elif anim_player.has_animation("running"):
-			anim_player.play("running", ANIMATION_BLEND_TIME)
+			_ensure_loop_mode("running")
+			if anim_player.current_animation != "running":
+				anim_player.play("running", ANIMATION_BLEND_TIME)
 		else:
-			# フォールバック: 歩行を速く再生
+			# フォールバック: 歩行アニメーションを使用
+			# （速度スケールは_update_animation_speed()で自動調整される）
 			_play_walk_animation()
-			anim_player.speed_scale = 1.5
 
 
 ## WASDでカメラを移動
@@ -381,13 +455,13 @@ func _setup_bot() -> void:
 	anim_player = _find_animation_player(bot_model)
 	if anim_player:
 		print("[TestBotOnMap] Found AnimationPlayer")
+		_print_available_animations()  # アニメーション一覧とループ設定を表示
 		# Play rifle_idle animation
 		if anim_player.has_animation("rifle_idle"):
 			anim_player.play("rifle_idle")
 			print("[TestBotOnMap] Playing rifle_idle animation")
 		else:
 			push_warning("[TestBotOnMap] rifle_idle animation not found")
-			_print_available_animations()
 	else:
 		push_warning("[TestBotOnMap] AnimationPlayer not found")
 
@@ -463,7 +537,9 @@ func _print_available_animations() -> void:
 	if anim_player:
 		print("[TestBotOnMap] Available animations:")
 		for anim_name in anim_player.get_animation_list():
-			print("  - %s" % anim_name)
+			var anim = anim_player.get_animation(anim_name)
+			var loop_mode = anim.loop_mode if anim else -1
+			print("  - %s (loop_mode=%d)" % [anim_name, loop_mode])
 
 
 ## CTスポーン位置にbotを配置
