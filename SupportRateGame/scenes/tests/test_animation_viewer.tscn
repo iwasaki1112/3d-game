@@ -1,6 +1,6 @@
 [gd_scene load_steps=9 format=3 uid="uid://ch1iq7cygkru2"]
 
-[ext_resource type="Script" uid="uid://dwm58yf7niht0" path="res://scripts/tests/bot_animation_viewer.gd" id="1_viewer"]
+[ext_resource type="Script" path="res://scripts/tests/test_animation_viewer.gd" id="1_viewer"]
 [ext_resource type="Script" uid="uid://dg2obkxmhp4v2" path="res://scripts/tests/orbit_camera.gd" id="2_orbit_camera"]
 [ext_resource type="PackedScene" uid="uid://bulpqdd8gcqbd" path="res://assets/characters/bot/bot.glb" id="3_bot"]
 
@@ -24,7 +24,7 @@ albedo_color = Color(0.3, 0.3, 0.35, 1)
 [sub_resource type="BoxShape3D" id="BoxShape3D_floor"]
 size = Vector3(20, 0.1, 20)
 
-[node name="BotAnimationViewer" type="Node3D"]
+[node name="TestAnimationViewer" type="Node3D"]
 script = ExtResource("1_viewer")
 
 [node name="CharacterBody" type="CharacterBody3D" parent="."]

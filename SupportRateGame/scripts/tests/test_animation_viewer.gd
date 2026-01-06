@@ -45,6 +45,13 @@ var left_hand_grip_target: Marker3D = null
 var left_hand_ik_offset: Vector3 = Vector3(-0.02, -0.06, -0.07)  # 手首→手のひらのオフセット（ローカル座標）
 var left_hand_ik_rotation: Vector3 = Vector3(-67, -165, 4)  # 手の角度オフセット（度数）
 
+# IKを無効にするアニメーション（リロード、死亡、ドア開けなど）
+const LEFT_HAND_IK_DISABLED_ANIMATIONS: Array[String] = [
+	"rifle_reload",
+	"rifle_death",
+	"rifle_open_door",
+]
+
 
 func _ready() -> void:
 	_setup_character()
@@ -343,6 +350,10 @@ var _left_hand_grip_source: Node3D = null
 
 func _update_left_hand_ik_target() -> void:
 	if not left_hand_grip_target or not _left_hand_grip_source:
+		return
+
+	# IKが無効の場合はスキップ
+	if left_hand_ik and not left_hand_ik.is_running():
 		return
 
 	# Update IK target to match LeftHandGrip global position with offset
@@ -669,8 +680,27 @@ func _play_animation(anim_name: String) -> void:
 
 		anim_player.play(anim_name, blend_time)
 		print("[BotViewer] Playing: %s (blend: %.2fs)" % [anim_name, blend_time])
+
+		# 左手IKの有効/無効を切り替え
+		_update_left_hand_ik_enabled(anim_name)
 	else:
 		push_warning("[BotViewer] Animation not found: ", anim_name)
+
+
+func _update_left_hand_ik_enabled(anim_name: String) -> void:
+	if not left_hand_ik:
+		return
+
+	var should_disable := anim_name in LEFT_HAND_IK_DISABLED_ANIMATIONS
+
+	if should_disable:
+		if left_hand_ik.is_running():
+			left_hand_ik.stop()
+			print("[BotViewer] Left hand IK disabled for: %s" % anim_name)
+	else:
+		if not left_hand_ik.is_running():
+			left_hand_ik.start()
+			print("[BotViewer] Left hand IK enabled for: %s" % anim_name)
 
 
 func _on_animation_button_pressed(anim_name: String) -> void:
