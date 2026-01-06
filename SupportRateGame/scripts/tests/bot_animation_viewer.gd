@@ -30,7 +30,7 @@ var walk_status_label: Label = null
 var right_hand_bone_idx: int = -1
 var weapon_attachment: BoneAttachment3D = null
 var muzzle_flash: Node3D = null
-const AK47_SCENE_PATH: String = "res://scenes/weapons/ak47_new.tscn"
+const AK47_SCENE_PATH: String = "res://scenes/weapons/ak47.tscn"
 
 # Shooting / Recoil
 var is_shooting: bool = false
