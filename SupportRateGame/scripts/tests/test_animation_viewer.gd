@@ -1,5 +1,5 @@
 extends Node3D
-## Bot animation viewer - simple animation testing for bot.glb
+## Animation viewer - simple animation testing for character models
 
 @onready var camera: Camera3D = $OrbitCamera
 @onready var button_container: VBoxContainer = $CanvasLayer/Panel/ScrollContainer/VBoxContainer
@@ -13,18 +13,19 @@ const DEFAULT_BLEND_TIME: float = 0.3
 var blend_time: float = DEFAULT_BLEND_TIME
 var blend_time_label: Label = null
 
+# Character selection
+const CHARACTERS_DIR: String = "res://assets/characters/"
+var available_characters: Array[String] = []  # 利用可能なキャラクターIDリスト
+var current_character_id: String = "bot"  # 現在選択中のキャラクターID
+var character_model: Node3D = null  # 現在のキャラクターモデルノード
+var character_option_button: OptionButton = null
+
 # Upper body rotation
 var spine_bone_idx: int = -1
 var upper_body_rotation: float = 0.0  # -45 to 45 degrees
 var upper_body_rotation_label: Label = null
 const UPPER_BODY_ROTATION_MIN: float = -45.0
 const UPPER_BODY_ROTATION_MAX: float = 45.0
-
-# Walk sequence test
-enum WalkState { NONE, START, LOOP, END }
-var walk_state: WalkState = WalkState.NONE
-var walk_base_name: String = "walk"  # "walk" or "sprint"
-var walk_status_label: Label = null
 
 # Weapon attachment
 var right_hand_bone_idx: int = -1
@@ -54,6 +55,9 @@ var left_hand_ik_disabled_animations: PackedStringArray = []
 
 
 func _ready() -> void:
+	# Scan available characters first
+	_scan_available_characters()
+
 	_setup_character()
 
 	if camera.has_method("set_target") and character_body:
@@ -62,6 +66,91 @@ func _ready() -> void:
 	_create_animation_buttons()
 
 	# Play idle animation first
+	if anim_player and anim_player.has_animation("rifle_idle"):
+		_play_animation("rifle_idle")
+	elif _animations.size() > 0:
+		_play_animation(_animations[0])
+
+
+func _scan_available_characters() -> void:
+	available_characters.clear()
+	var dir = DirAccess.open(CHARACTERS_DIR)
+	if dir == null:
+		push_warning("[AnimViewer] Cannot open characters directory: %s" % CHARACTERS_DIR)
+		return
+
+	dir.list_dir_begin()
+	var folder_name = dir.get_next()
+	while folder_name != "":
+		if dir.current_is_dir() and not folder_name.begins_with("."):
+			# Check if glb file exists
+			var glb_path = CHARACTERS_DIR + folder_name + "/" + folder_name + ".glb"
+			if ResourceLoader.exists(glb_path):
+				available_characters.append(folder_name)
+				print("[AnimViewer] Found character: %s" % folder_name)
+		folder_name = dir.get_next()
+	dir.list_dir_end()
+
+	available_characters.sort()
+	print("[AnimViewer] Available characters: ", available_characters)
+
+
+func _change_character(character_id: String) -> void:
+	if character_id == current_character_id:
+		return
+
+	print("[AnimViewer] Changing character to: %s" % character_id)
+
+	# Remove current character and IK
+	if left_hand_ik:
+		left_hand_ik.stop()
+		left_hand_ik.queue_free()
+		left_hand_ik = null
+
+	if left_hand_grip_target:
+		left_hand_grip_target.queue_free()
+		left_hand_grip_target = null
+
+	_left_hand_grip_source = null
+	muzzle_flash = null
+
+	if weapon_attachment:
+		weapon_attachment.queue_free()
+		weapon_attachment = null
+
+	# Remove current character model
+	if character_model:
+		character_model.queue_free()
+		character_model = null
+
+	# Reset state
+	anim_player = null
+	skeleton = null
+	spine_bone_idx = -1
+	right_hand_bone_idx = -1
+	_animations.clear()
+
+	# Update current character ID
+	current_character_id = character_id
+
+	# Load and instantiate new character
+	var glb_path = CHARACTERS_DIR + character_id + "/" + character_id + ".glb"
+	var character_scene = load(glb_path)
+	if not character_scene:
+		push_warning("[AnimViewer] Failed to load character: %s" % glb_path)
+		return
+
+	character_model = character_scene.instantiate()
+	character_model.name = character_id.capitalize() + "Model"
+	character_body.add_child(character_model)
+
+	# Setup the new character
+	_setup_character_internal()
+
+	# Recreate animation buttons
+	_create_animation_buttons()
+
+	# Play idle animation
 	if anim_player and anim_player.has_animation("rifle_idle"):
 		_play_animation("rifle_idle")
 	elif _animations.size() > 0:
@@ -125,42 +214,65 @@ func _setup_character() -> void:
 	_scan_available_weapons()
 	_load_weapon_resource()
 
-	var bot_model = $CharacterBody/BotModel
-	if not bot_model:
-		push_warning("[BotViewer] BotModel not found")
+	# Get existing character model from scene or load dynamically
+	character_model = character_body.get_node_or_null("BotModel")
+	if not character_model:
+		# Try to find any model node
+		for child in character_body.get_children():
+			if child is Node3D and not child is CollisionShape3D:
+				character_model = child
+				break
+
+	if not character_model:
+		# Load default character
+		var glb_path = CHARACTERS_DIR + current_character_id + "/" + current_character_id + ".glb"
+		if ResourceLoader.exists(glb_path):
+			var character_scene = load(glb_path)
+			if character_scene:
+				character_model = character_scene.instantiate()
+				character_model.name = current_character_id.capitalize() + "Model"
+				character_body.add_child(character_model)
+
+	if not character_model:
+		push_warning("[AnimViewer] Character model not found")
+		return
+
+	_setup_character_internal()
+
+
+func _setup_character_internal() -> void:
+	if not character_model:
+		push_warning("[AnimViewer] Character model not found")
 		return
 
 	# Debug: Print model structure
-	print("[BotViewer] Model structure:")
-	_print_node_tree(bot_model, 0)
+	print("[AnimViewer] Model structure:")
+	_print_node_tree(character_model, 0)
 
 	# Debug: Print model bounds
-	var aabb := _get_model_aabb(bot_model)
-	print("[BotViewer] Model AABB: ", aabb)
-	print("[BotViewer] Model size: ", aabb.size)
-	print("[BotViewer] Model position: ", bot_model.global_position)
-	print("[BotViewer] CharacterBody position: ", character_body.global_position)
+	var aabb := _get_model_aabb(character_model)
+	print("[AnimViewer] Model AABB: ", aabb)
+	print("[AnimViewer] Model size: ", aabb.size)
+	print("[AnimViewer] Model position: ", character_model.global_position)
+	print("[AnimViewer] CharacterBody position: ", character_body.global_position)
 
 	# Find AnimationPlayer
-	anim_player = _find_animation_player(bot_model)
+	anim_player = _find_animation_player(character_model)
 	if anim_player:
 		_collect_animations()
-		print("[BotViewer] Found AnimationPlayer with %d animations" % _animations.size())
-		# Connect animation_finished for walk sequence
-		if not anim_player.animation_finished.is_connected(_on_anim_finished):
-			anim_player.animation_finished.connect(_on_anim_finished)
+		print("[AnimViewer] Found AnimationPlayer with %d animations" % _animations.size())
 	else:
-		push_warning("[BotViewer] AnimationPlayer not found")
+		push_warning("[AnimViewer] AnimationPlayer not found")
 
 	# Find Skeleton3D and spine bone
-	skeleton = _find_skeleton(bot_model)
+	skeleton = _find_skeleton(character_model)
 	if skeleton:
-		print("[BotViewer] Found Skeleton3D with %d bones" % skeleton.get_bone_count())
+		print("[AnimViewer] Found Skeleton3D with %d bones" % skeleton.get_bone_count())
 		_print_bone_hierarchy(skeleton)
 		_find_spine_bone()
 		_attach_weapon()
 	else:
-		push_warning("[BotViewer] Skeleton3D not found")
+		push_warning("[AnimViewer] Skeleton3D not found")
 
 
 func _find_animation_player(node: Node) -> AnimationPlayer:
@@ -502,7 +614,7 @@ func _collect_animations() -> void:
 
 func _create_animation_buttons() -> void:
 	if not button_container:
-		push_warning("[BotViewer] Button container not found")
+		push_warning("[AnimViewer] Button container not found")
 		return
 
 	# Clear existing buttons
@@ -511,13 +623,33 @@ func _create_animation_buttons() -> void:
 
 	# Title
 	var label := Label.new()
-	label.text = "Bot Animations"
+	label.text = "Animation Viewer"
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.add_theme_font_size_override("font_size", 20)
 	button_container.add_child(label)
 
 	var separator := HSeparator.new()
 	button_container.add_child(separator)
+
+	# Character selection
+	var char_label := Label.new()
+	char_label.text = "Character"
+	char_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	char_label.add_theme_font_size_override("font_size", 18)
+	button_container.add_child(char_label)
+
+	character_option_button = OptionButton.new()
+	character_option_button.custom_minimum_size.x = 180
+	for i in range(available_characters.size()):
+		var char_id = available_characters[i]
+		character_option_button.add_item(char_id.capitalize(), i)
+		if char_id == current_character_id:
+			character_option_button.select(i)
+	character_option_button.item_selected.connect(_on_character_selected)
+	button_container.add_child(character_option_button)
+
+	var char_sep := HSeparator.new()
+	button_container.add_child(char_sep)
 
 	# Weapon selection
 	var weapon_label := Label.new()
@@ -631,40 +763,6 @@ func _create_animation_buttons() -> void:
 	reset_rotation_btn.text = "Reset (0°)"
 	reset_rotation_btn.pressed.connect(_on_reset_rotation_pressed)
 	button_container.add_child(reset_rotation_btn)
-
-	# Walk sequence controls
-	var walk_spacer := Control.new()
-	walk_spacer.custom_minimum_size.y = 10
-	button_container.add_child(walk_spacer)
-
-	var walk_label := Label.new()
-	walk_label.text = "Walk Sequence"
-	walk_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	walk_label.add_theme_font_size_override("font_size", 18)
-	button_container.add_child(walk_label)
-
-	var walk_sep := HSeparator.new()
-	button_container.add_child(walk_sep)
-
-	walk_status_label = Label.new()
-	walk_status_label.text = "State: NONE"
-	walk_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	button_container.add_child(walk_status_label)
-
-	var start_walk_btn := Button.new()
-	start_walk_btn.text = "Start Walk"
-	start_walk_btn.pressed.connect(_on_start_walk_pressed.bind("walk"))
-	button_container.add_child(start_walk_btn)
-
-	var start_sprint_btn := Button.new()
-	start_sprint_btn.text = "Start Sprint"
-	start_sprint_btn.pressed.connect(_on_start_walk_pressed.bind("sprint"))
-	button_container.add_child(start_sprint_btn)
-
-	var stop_walk_btn := Button.new()
-	stop_walk_btn.text = "Stop Walk"
-	stop_walk_btn.pressed.connect(_on_stop_walk_pressed)
-	button_container.add_child(stop_walk_btn)
 
 	# Shooting controls
 	var shoot_spacer := Control.new()
@@ -781,6 +879,13 @@ func _on_print_ik_values() -> void:
 	print("[BotViewer] Left Hand IK Values:")
 	print("  Position Offset: Vector3(%.3f, %.3f, %.3f)" % [left_hand_ik_offset.x, left_hand_ik_offset.y, left_hand_ik_offset.z])
 	print("  Rotation Offset: Vector3(%.1f, %.1f, %.1f)" % [left_hand_ik_rotation.x, left_hand_ik_rotation.y, left_hand_ik_rotation.z])
+
+
+func _on_character_selected(index: int) -> void:
+	if index < 0 or index >= available_characters.size():
+		return
+	var char_id = available_characters[index]
+	_change_character(char_id)
 
 
 func _on_weapon_selected(index: int) -> void:
@@ -908,100 +1013,6 @@ func _on_reset_rotation_pressed() -> void:
 		if child is HSlider and child.min_value == UPPER_BODY_ROTATION_MIN:
 			child.value = 0.0
 			break
-
-
-## ========================================
-## Walk Sequence Handlers
-## ========================================
-
-func _on_start_walk_pressed(base_name: String) -> void:
-	if not anim_player:
-		return
-
-	walk_base_name = base_name
-	var start_anim = "rifle_" + base_name + "_start"
-	var loop_anim = "rifle_" + base_name
-
-	if anim_player.has_animation(start_anim):
-		walk_state = WalkState.START
-		anim_player.play(start_anim, blend_time)
-		print("[BotViewer] Walk sequence: START -> %s" % start_anim)
-	elif anim_player.has_animation(loop_anim):
-		walk_state = WalkState.LOOP
-		anim_player.play(loop_anim, blend_time)
-		print("[BotViewer] Walk sequence: LOOP -> %s" % loop_anim)
-	else:
-		push_warning("[BotViewer] No walk animation found for: %s" % base_name)
-		walk_state = WalkState.NONE
-
-	_update_walk_status()
-
-
-func _on_stop_walk_pressed() -> void:
-	if not anim_player or walk_state == WalkState.NONE:
-		return
-
-	var end_anim = "rifle_" + walk_base_name + "_end"
-
-	if anim_player.has_animation(end_anim):
-		walk_state = WalkState.END
-		anim_player.play(end_anim, blend_time)
-		print("[BotViewer] Walk sequence: END -> %s" % end_anim)
-	else:
-		# No end animation, go directly to idle
-		walk_state = WalkState.NONE
-		if anim_player.has_animation("rifle_idle"):
-			anim_player.play("rifle_idle", blend_time)
-		print("[BotViewer] Walk sequence: STOPPED (no end anim)")
-
-	_update_walk_status()
-
-
-func _on_anim_finished(anim_name: String) -> void:
-	print("[BotViewer] animation_finished: %s (walk_state=%s)" % [anim_name, WalkState.keys()[walk_state]])
-
-	# アニメーションのloop_modeを確認
-	var anim = anim_player.get_animation(anim_name)
-	if anim:
-		print("[BotViewer]   -> loop_mode=%d, length=%.2fs" % [anim.loop_mode, anim.length])
-
-	if walk_state == WalkState.NONE:
-		return
-
-	var expected_start = "rifle_" + walk_base_name + "_start"
-	var expected_end = "rifle_" + walk_base_name + "_end"
-	var loop_anim = "rifle_" + walk_base_name
-
-	match walk_state:
-		WalkState.START:
-			if anim_name == expected_start:
-				walk_state = WalkState.LOOP
-				if anim_player.has_animation(loop_anim):
-					anim_player.play(loop_anim, 0.1)
-					print("[BotViewer] Walk sequence: START -> LOOP (%s)" % loop_anim)
-				_update_walk_status()
-
-		WalkState.END:
-			if anim_name == expected_end:
-				walk_state = WalkState.NONE
-				if anim_player.has_animation("rifle_idle"):
-					anim_player.play("rifle_idle", blend_time)
-				print("[BotViewer] Walk sequence: END -> IDLE")
-				_update_walk_status()
-
-		WalkState.LOOP:
-			# ループアニメーションが終了した場合（loop_modeが効いていない場合）
-			# 再度再生する
-			if anim_name == loop_anim:
-				print("[BotViewer] WARNING: Loop animation finished unexpectedly, restarting...")
-				anim_player.play(loop_anim, 0.0)
-
-
-
-func _update_walk_status() -> void:
-	if walk_status_label:
-		var state_name = WalkState.keys()[walk_state]
-		walk_status_label.text = "State: %s" % state_name
 
 
 ## ========================================

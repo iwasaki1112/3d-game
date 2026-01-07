@@ -5,6 +5,12 @@
 - **プロジェクトパス**: `SupportRateGame/`
 - **言語**: GDScript
 
+## スキル
+| スキル | 用途 |
+|--------|------|
+| `/add-weapon` | 武器追加ガイド（Blender操作含む） |
+| `/sakurai-review` | ゲーム設計レビュー |
+
 ## ドキュメント参照
 詳細な仕様は以下のドキュメントを参照すること：
 
@@ -13,7 +19,6 @@
 | `docs/GAME_DESIGN.md` | ゲーム設計・仕様 |
 | `docs/CHARACTER_API.md` | キャラクターAPI |
 | `docs/WEAPON_API.md` | 武器システムAPI |
-| `docs/WEAPON_GUIDE.md` | 武器追加ガイド（Blender操作含む） |
 | `docs/BLENDER_ANIMATION.md` | Blenderアニメーション設定 |
 
 ## Tool Priority
