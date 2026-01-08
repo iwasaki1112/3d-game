@@ -168,14 +168,12 @@ func _on_create_room_pressed() -> void:
 	NakamaClient.create_room(TEAM_SIZE, false)
 
 func _on_room_created(match_id: String, _room_code: String) -> void:
-	print("Room created: %s" % match_id)
 	_created_match_id = match_id
 	GameManager.is_host = true
 
 	# ホストはランダムでチームを割り当て（0=CT, 1=TERRORIST）
 	var random_team = randi() % 2
 	GameManager.assigned_team = random_team as GameManager.Team
-	print("[LobbyScreen] Host assigned team: %s" % ("CT" if random_team == 0 else "TERRORIST"))
 
 	if create_room_button:
 		create_room_button.disabled = false
@@ -278,7 +276,6 @@ func _on_match_presence_joined(presences: Array) -> void:
 			is_me = true
 
 		if not is_me and (not session_id.is_empty() or not user_id.is_empty()):
-			print("[LobbyScreen] Other player joined, sending team assignment")
 			# チーム割り当てをゲストに送信
 			_send_team_assignment_to_guest()
 			return
@@ -302,15 +299,9 @@ func _send_team_assignment_to_guest() -> void:
 		"guest_team": guest_team
 	}
 
-	print("[LobbyScreen] Sending team assignment - Host: %s, Guest: %s" % [
-		"CT" if host_team == 0 else "TERRORIST",
-		"CT" if guest_team == 0 else "TERRORIST"
-	])
-
 	# 複数回送信してゲストが確実に受け取れるようにする
 	for i in range(3):
 		NakamaClient.send_match_data(OPCODE_TEAM_ASSIGNMENT, data)
-		print("[LobbyScreen] Team assignment sent (attempt %d)" % (i + 1))
 		await get_tree().create_timer(0.3).timeout
 
 	# ホストもゲームに遷移
@@ -319,14 +310,10 @@ func _send_team_assignment_to_guest() -> void:
 
 ## マッチデータ受信（ゲスト側でチーム割り当てを受信）
 func _on_match_data_received(op_code: int, data: Dictionary, _sender_id: String) -> void:
-	print("[LobbyScreen] Received match data - op_code: %d, waiting: %s" % [op_code, _waiting_for_team_assignment])
-
 	if op_code != OPCODE_TEAM_ASSIGNMENT:
-		print("[LobbyScreen] Ignoring op_code %d (expected %d)" % [op_code, OPCODE_TEAM_ASSIGNMENT])
 		return
 
 	if not _waiting_for_team_assignment:
-		print("[LobbyScreen] Not waiting for team assignment, ignoring")
 		return
 
 	# ゲストはguest_teamを自分のチームとして設定
@@ -334,17 +321,11 @@ func _on_match_data_received(op_code: int, data: Dictionary, _sender_id: String)
 	GameManager.assigned_team = my_team as GameManager.Team
 	_waiting_for_team_assignment = false
 
-	print("[LobbyScreen] Received team assignment: %s" % ("CT" if my_team == 0 else "TERRORIST"))
-
 	# ゲームに遷移
 	_transition_to_game(GameManager.current_match_id)
 
 func _transition_to_game(match_id: String) -> void:
 	GameManager.current_match_id = match_id
 	GameManager.is_online_match = true
-
-	print("[LobbyScreen] Transitioning to game - My team: %s" % (
-		"CT" if GameManager.assigned_team == GameManager.Team.CT else "TERRORIST"
-	))
 
 	get_tree().change_scene_to_file("res://scenes/game.tscn")

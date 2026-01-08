@@ -10,23 +10,15 @@ func _ready() -> void:
 
 
 func _generate_collisions() -> void:
-	print("[MapCollision] コリジョン生成開始...")
-	print("[MapCollision] 子ノード数: ", get_child_count())
 	mesh_count = 0
 	_process_node_recursive(self)
-	print("[MapCollision] コリジョン生成完了: ", mesh_count, " メッシュ")
 
 
 func _process_node_recursive(node: Node) -> void:
-	# デバッグ: ノード情報を出力
-	if node != self:
-		print("[MapCollision] ノード: ", node.name, " タイプ: ", node.get_class())
-
 	# MeshInstance3Dの場合、コリジョンを生成
 	if node is MeshInstance3D:
 		var mesh_instance := node as MeshInstance3D
 		if mesh_instance.mesh != null:
-			print("[MapCollision] メッシュ発見: ", mesh_instance.name)
 			_create_collision_for_mesh(mesh_instance)
 			mesh_count += 1
 
@@ -45,7 +37,6 @@ func _create_collision_for_mesh(mesh_instance: MeshInstance3D) -> void:
 	# メッシュからトライメッシュコリジョンシェイプを生成
 	var shape := mesh_instance.mesh.create_trimesh_shape()
 	if shape == null:
-		print("[MapCollision] シェイプ作成失敗: ", mesh_instance.name)
 		return
 
 	var collision_shape := CollisionShape3D.new()
@@ -56,4 +47,3 @@ func _create_collision_for_mesh(mesh_instance: MeshInstance3D) -> void:
 
 	# メッシュの親に追加し、同じトランスフォームを適用
 	mesh_instance.add_child(static_body)
-	print("[MapCollision] コリジョン追加: ", mesh_instance.name)

@@ -181,7 +181,6 @@ func send_match_data(op_code: int, data: Dictionary) -> void:
 			"data": Marshalls.utf8_to_base64(JSON.stringify(data))
 		}
 	}
-	print("[NakamaClient] Sending match_data - op_code: %d, match_id: %s" % [op_code, _current_match_id])
 	_send_socket_message(message)
 
 # =====================================
@@ -287,7 +286,6 @@ func _get_or_create_device_id() -> String:
 	if OS.has_feature("debug"):
 		# デバッグビルドではランダムIDを生成（テスト用）
 		var random_id = _generate_uuid()
-		print("[NakamaClient] Debug mode: Generated new device ID: ", random_id)
 		return random_id
 
 	var config_path = "user://device_id.cfg"
@@ -369,7 +367,6 @@ func _handle_request_success(request_type: String, data: Dictionary) -> void:
 		"create_room":
 			var match_id = data.get("match_id", "")
 			var room_code = data.get("room_code", "")
-			print("Room created: ", match_id, " Code: ", room_code)
 			room_created.emit(match_id, room_code if room_code else "")
 
 		"join_by_code":
@@ -384,11 +381,10 @@ func _handle_request_success(request_type: String, data: Dictionary) -> void:
 
 		"list_rooms":
 			var rooms = data.get("rooms", [])
-			print("Available rooms: ", rooms)
 			rooms_listed.emit(rooms)
 
 		_:
-			print("Unhandled request type: ", request_type, " Data: ", data)
+			pass
 
 func _handle_request_error(request_type: String, error: String) -> void:
 	match request_type:
@@ -413,7 +409,6 @@ func _handle_socket_message(message: String) -> void:
 		return
 
 	var data = json.data
-	print("[NakamaClient] Socket message received - keys: ", data.keys())
 
 	# マッチ参加成功
 	if data.has("match"):
@@ -424,7 +419,6 @@ func _handle_socket_message(message: String) -> void:
 		var self_presence = match_data.get("self", {})
 		if self_presence.has("session_id") and _session:
 			_session.session_id = self_presence.get("session_id", "")
-			print("[NakamaClient] Stored session_id from match join: ", _session.session_id)
 
 		match_joined.emit(_current_match_id)
 
@@ -450,20 +444,14 @@ func _handle_socket_message(message: String) -> void:
 		var sender = ""
 		if presence is Dictionary:
 			sender = presence.get("user_id", "")
-		print("[NakamaClient] Emitting match_data_received - op_code: %d, sender: %s" % [op_code, sender])
 		match_data_received.emit(op_code, payload, sender)
 
 	# プレゼンス更新
 	elif data.has("match_presence_event"):
-		print("[NakamaClient] match_presence_event received")
 		var event = data.match_presence_event
-		print("[NakamaClient] event data: ", event)
 		var joins = event.get("joins", [])
 		var leaves = event.get("leaves", [])
-		print("[NakamaClient] joins: ", joins)
-		print("[NakamaClient] leaves: ", leaves)
 		if joins.size() > 0:
-			print("[NakamaClient] Emitting match_presence_joined signal with: ", joins)
 			match_presence_joined.emit(joins)
 		if leaves.size() > 0:
 			match_presence_left.emit(leaves)
@@ -497,7 +485,6 @@ func _parse_jwt(token: String) -> void:
 		_session.username = payload.get("usn", "")
 		_session.session_id = payload.get("sid", "")
 		_session.expires_at = payload.get("exp", 0)
-		print("[NakamaClient] Parsed JWT - user_id: %s, session_id: %s" % [_session.user_id, _session.session_id])
 
 
 # =====================================

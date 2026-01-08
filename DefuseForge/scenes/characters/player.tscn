@@ -1,7 +1,6 @@
-[gd_scene load_steps=6 format=3 uid="uid://cplayer"]
+[gd_scene load_steps=5 format=3 uid="uid://cplayer"]
 
 [ext_resource type="Script" path="res://scripts/characters/player.gd" id="1_player"]
-[ext_resource type="PackedScene" uid="uid://cpmgyp4xd80ck" path="res://assets/characters/gsg9/gsg9.fbx" id="2_character"]
 [ext_resource type="Script" path="res://scripts/characters/components/vision_component.gd" id="3_vision"]
 [ext_resource type="Script" path="res://scripts/characters/components/combat_component.gd" id="4_combat"]
 
@@ -17,9 +16,6 @@ script = ExtResource("1_player")
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
 shape = SubResource("CapsuleShape3D_player")
-
-[node name="CharacterModel" parent="." instance=ExtResource("2_character")]
-transform = Transform3D(2, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0)
 
 [node name="Camera3D" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 8, 0)

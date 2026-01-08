@@ -2,15 +2,12 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dcram2bb6m202"
+uid="uid://cu5jb516utwkq"
 path.s3tc="res://.godot/imported/map_map_grid_floor_texture.png-b74dc439605daef40986b99c74ccbc6e.s3tc.ctex"
 path.etc2="res://.godot/imported/map_map_grid_floor_texture.png-b74dc439605daef40986b99c74ccbc6e.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
-}
-generator_parameters={
-"md5": "0f7c164b64ae586f8789aebca96b8b13"
 }
 
 [deps]

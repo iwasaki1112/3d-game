@@ -115,6 +115,19 @@ func update_weapon(weapon_id: String, updates: Dictionary) -> bool:
 	return true
 
 
+## 武器データを更新（整数ID - 後方互換性用）
+func update_weapon_by_int_id(weapon_id: int, updates: Dictionary) -> bool:
+	var id_map := {
+		0: "",  # NONE
+		1: "ak47",
+		2: "usp"
+	}
+	var str_id = id_map.get(weapon_id, "")
+	if str_id.is_empty():
+		return false
+	return update_weapon(str_id, updates)
+
+
 ## 指定ディレクトリから武器リソースを読み込み
 ## @param dir_path: 武器リソースディレクトリ（デフォルト: res://resources/weapons/）
 ## @return: 読み込んだ武器数
@@ -139,7 +152,6 @@ func load_from_directory(dir_path: String = DEFAULT_WEAPONS_DIR) -> int:
 				if weapon_res:
 					add_weapon(weapon_res)
 					loaded_count += 1
-					print("[WeaponDatabase] Loaded weapon: %s from %s" % [weapon_res.weapon_id, tres_path])
 		folder_name = dir.get_next()
 
 	dir.list_dir_end()

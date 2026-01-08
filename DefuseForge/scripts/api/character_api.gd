@@ -355,7 +355,7 @@ static func get_weapon_id(character: CharacterBase) -> int:
 ## 武器データを取得
 static func get_weapon_data(weapon_id: int) -> Dictionary:
 	var db = get_weapon_database()
-	var weapon = db.get_weapon(weapon_id)
+	var weapon = db.get_weapon_by_int_id(weapon_id)
 	if weapon:
 		return weapon.to_dict()
 	return CharacterSetup.get_weapon_data(weapon_id)
@@ -366,7 +366,7 @@ static func get_weapon_data(weapon_id: int) -> Dictionary:
 ## @param updates: 更新する値（例: {"damage": 40, "accuracy": 0.9}）
 static func update_weapon_stats(weapon_id: int, updates: Dictionary) -> bool:
 	var db = get_weapon_database()
-	return db.update_weapon(weapon_id, updates)
+	return db.update_weapon_by_int_id(weapon_id, updates)
 
 
 ## ========================================

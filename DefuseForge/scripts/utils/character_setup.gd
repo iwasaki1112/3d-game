@@ -5,18 +5,15 @@ extends RefCounted
 ## テクスチャ適用、アニメーション読み込みなどの共通処理を提供
 
 ## テクスチャマッピング定義
+## キャラクター: phantom = Terrorist, vanguard = Counter-Terrorist
 const TEXTURE_MAP := {
-	"t_leet_glass": {
-		"albedo": "res://assets/characters/leet/t_leet_glass.tga",
+	"phantom": {
+		"albedo": "res://assets/characters/phantom/phantom_phantom_basecolor.png",
 		"normal": ""
 	},
-	"t_leet": {
-		"albedo": "res://assets/characters/leet/t_leet.tga",
-		"normal": "res://assets/characters/leet/t_leet_normal.tga"
-	},
-	"ct_gsg9": {
-		"albedo": "res://assets/characters/gsg9/ct_gsg9.tga",
-		"normal": "res://assets/characters/gsg9/ct_gsg9_normal.tga"
+	"vanguard": {
+		"albedo": "res://assets/characters/vanguard/vanguard_basecolor.png",
+		"normal": ""
 	}
 }
 
@@ -329,11 +326,6 @@ static func calculate_y_offset_from_skeleton(skeleton: Skeleton3D, model_scale: 
 	# （ToeBaseが地面レベル Y=0 になるようにモデルを配置）
 	var y_offset := -toe_rest.origin.y * model_scale
 
-	if debug_name:
-		print("[CharacterSetup] %s: Y offset: toe_rest_y=%.3f, scale=%.1f, total=%.3f" % [
-			debug_name, toe_rest.origin.y, model_scale, y_offset
-		])
-
 	return y_offset
 
 
@@ -381,8 +373,6 @@ static func _apply_textures_to_mesh(mesh_instance: MeshInstance3D, debug_name: S
 	# テクスチャをロード
 	var albedo_tex = load(albedo_path) as Texture2D
 	if albedo_tex == null:
-		if debug_name:
-			print("[CharacterSetup] %s: Failed to load texture: %s" % [debug_name, albedo_path])
 		return
 
 	var normal_tex: Texture2D = null
@@ -409,9 +399,6 @@ static func _apply_textures_to_mesh(mesh_instance: MeshInstance3D, debug_name: S
 				new_mat.normal_texture = normal_tex
 
 			mesh_instance.set_surface_override_material(i, new_mat)
-
-	if debug_name:
-		print("[CharacterSetup] %s: Applied texture to mesh '%s'" % [debug_name, mesh_instance.name])
 
 
 ## AnimationPlayerにアニメーションを読み込む（Rifle Animset Pro使用）
@@ -443,8 +430,6 @@ static func _load_rifle_animset_pro_animations(lib: AnimationLibrary, model: Nod
 		# FBXがまだロードされていなければロード
 		if not fbx_cache.has(fbx_key):
 			if not ResourceLoader.exists(fbx_path):
-				if debug_name:
-					print("[CharacterSetup] %s: FBX not found: %s" % [debug_name, fbx_path])
 				continue
 			var scene = load(fbx_path)
 			if scene:
@@ -461,8 +446,6 @@ static func _load_rifle_animset_pro_animations(lib: AnimationLibrary, model: Nod
 
 		# 指定されたクリップを検索
 		if not scene_anim_player.has_animation(clip_name):
-			if debug_name:
-				print("[CharacterSetup] %s: Animation clip not found: %s in %s" % [debug_name, clip_name, fbx_path])
 			continue
 
 		# アニメーションをコピーして追加
@@ -472,8 +455,6 @@ static func _load_rifle_animset_pro_animations(lib: AnimationLibrary, model: Nod
 			anim_copy.loop_mode = Animation.LOOP_LINEAR if loop else Animation.LOOP_NONE
 			_adjust_animation_paths(anim_copy, model, "full", true)  # リターゲット有効
 			lib.add_animation(anim_name, anim_copy)
-			if debug_name:
-				print("[CharacterSetup] %s: Loaded animation '%s' from '%s'" % [debug_name, anim_name, clip_name])
 
 	# キャッシュしたインスタンスを解放
 	for key in fbx_cache.keys():
@@ -672,20 +653,17 @@ static func create_weapon_attachment(weapon_id: int) -> Node3D:
 	
 	var scene = load(data.scene_path)
 	if scene == null:
-		print("[CharacterSetup] Failed to load weapon scene: %s" % data.scene_path)
 		return null
-	
+
 	var weapon_instance = scene.instantiate()
 	return weapon_instance
 
 
 ## キャラクターに武器をアタッチ
-static func attach_weapon_to_character(character: Node, skeleton: Skeleton3D, weapon_id: int, debug_name: String = "") -> Node3D:
+static func attach_weapon_to_character(character: Node, skeleton: Skeleton3D, weapon_id: int, _debug_name: String = "") -> Node3D:
 	if skeleton == null:
-		if debug_name:
-			print("[CharacterSetup] %s: No skeleton found for weapon attachment" % debug_name)
 		return null
-	
+
 	# 既存の武器を削除
 	var existing = character.get_node_or_null("WeaponAttachment")
 	if existing:
@@ -694,13 +672,11 @@ static func attach_weapon_to_character(character: Node, skeleton: Skeleton3D, we
 	# 武器なしの場合
 	if weapon_id == WeaponId.NONE:
 		return null
-	
+
 	var data = WEAPON_DATA.get(weapon_id, null)
 	if data == null or data.scene_path.is_empty():
-		if debug_name:
-			print("[CharacterSetup] %s: No weapon scene for weapon_id %d" % [debug_name, weapon_id])
 		return null
-	
+
 	# 右手のボーンインデックスを取得
 	var bone_name = "mixamorig_RightHand"
 	var bone_idx = skeleton.find_bone(bone_name)
@@ -708,28 +684,22 @@ static func attach_weapon_to_character(character: Node, skeleton: Skeleton3D, we
 		# 代替ボーン名を試す
 		bone_name = "mixamorig1_RightHand"
 		bone_idx = skeleton.find_bone(bone_name)
-	
+
 	if bone_idx == -1:
-		if debug_name:
-			print("[CharacterSetup] %s: Could not find hand bone" % debug_name)
 		return null
-	
+
 	# BoneAttachment3Dを作成
 	var bone_attachment = BoneAttachment3D.new()
 	bone_attachment.name = "WeaponAttachment"
 	bone_attachment.bone_name = bone_name
 	skeleton.add_child(bone_attachment)
-	
+
 	# 武器シーンをロード（位置・回転はシーンファイル内で設定済み）
 	var weapon_model = create_weapon_attachment(weapon_id)
 	if weapon_model:
 		bone_attachment.add_child(weapon_model)
-		
-		if debug_name:
-			print("[CharacterSetup] %s: Attached weapon %s to %s" % [debug_name, data.name, bone_name])
-		
 		return bone_attachment
-	
+
 	bone_attachment.queue_free()
 	return null
 
@@ -739,7 +709,7 @@ static func attach_weapon_to_character(character: Node, skeleton: Skeleton3D, we
 ## @param weapon_id: 武器ID
 ## @param anim_state: アニメーション状態（AnimState enum）
 ## @param debug_name: デバッグ用キャラクター名
-static func update_weapon_position(weapon_attachment: Node3D, weapon_id: int, anim_state: int, debug_name: String = "") -> void:
+static func update_weapon_position(weapon_attachment: Node3D, weapon_id: int, anim_state: int, _debug_name: String = "") -> void:
 	if weapon_attachment == null:
 		return
 
@@ -785,11 +755,6 @@ static func update_weapon_position(weapon_attachment: Node3D, weapon_id: int, an
 	model_node.position = final_pos
 	model_node.rotation_degrees = final_rot
 
-	if debug_name and (offset_pos != Vector3.ZERO or offset_rot != Vector3.ZERO):
-		print("[CharacterSetup] %s: Weapon position updated - state=%d, offset=(%s, %s)" % [
-			debug_name, anim_state, offset_pos, offset_rot
-		])
-
 
 ## アニメーション名からアニメーション状態を取得
 ## @param anim_name: アニメーション名（例: "idle_rifle", "walking_none"）
@@ -834,8 +799,8 @@ static func print_tree(node: Node, depth: int = 0, prefix: String = "") -> void:
 		extra = " [bones=%d]" % skel.get_bone_count()
 	elif node is AnimationPlayer:
 		var ap = node as AnimationPlayer
-		extra = " [anims=%s]" % ap.get_animation_list()
-	print("%s%s%s (%s)%s" % [prefix, indent, node.name, node.get_class(), extra])
+		extra = " [anims=%s]" % str(ap.get_animation_list())
+	push_warning("%s%s%s (%s)%s" % [prefix, indent, node.name, node.get_class(), extra])
 	for child in node.get_children():
 		print_tree(child, depth + 1, prefix)
 
@@ -852,8 +817,6 @@ static func fix_skin_bindings(model: Node, skeleton: Skeleton3D = null, debug_na
 		skeleton = find_skeleton(model)
 
 	if skeleton == null:
-		if debug_name:
-			print("[CharacterSetup] %s: Cannot fix skin bindings - skeleton not found" % debug_name)
 		return
 
 	_fix_skin_bindings_recursive(model, skeleton, debug_name)
@@ -888,11 +851,6 @@ static func _fix_skin_bindings_recursive(node: Node, skeleton: Skeleton3D, debug
 
 			# スキンをスケルトンに登録
 			skeleton.register_skin(new_skin)
-
-			if debug_name:
-				print("[CharacterSetup] %s: Fixed skin '%s' - %d/%d binds resolved" % [
-					debug_name, mesh_instance.name, fixed_count, new_skin.get_bind_count()
-				])
 
 	for child in node.get_children():
 		_fix_skin_bindings_recursive(child, skeleton, debug_name)

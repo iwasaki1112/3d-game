@@ -447,8 +447,8 @@ func _on_weapon_rot_z_changed(value: float) -> void:
 	_apply_weapon_offset()
 
 
-func _update_slider_label(name: String, value: float, is_position: bool) -> void:
-	var label = bottom_panel.find_child(name + "Value", true, false)
+func _update_slider_label(slider_name: String, value: float, is_position: bool) -> void:
+	var label = bottom_panel.find_child(slider_name + "Value", true, false)
 	if label:
 		label.text = "%.2f" % value if is_position else "%.0f" % value
 

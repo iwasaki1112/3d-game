@@ -65,8 +65,6 @@ func _ready() -> void:
 		if GameManager.assigned_team == GameManager.Team.TERRORIST:
 			my_team_node = t_node
 			enemy_team_node = ct_node
-		print("[GameScene] Online match - My team: %s" % ("CT" if GameManager.assigned_team == GameManager.Team.CT else "TERRORIST"))
-
 	# 自分のチームを収集してSquadManagerに登録
 	var my_team_members: Array[CharacterBody3D] = []
 	for child in my_team_node.get_children():
@@ -76,7 +74,6 @@ func _ready() -> void:
 			if GameManager.is_online_match:
 				if "is_player_controlled" in child:
 					child.is_player_controlled = true
-					print("[GameScene] Set is_player_controlled=true for %s" % child.name)
 
 	# SquadManagerで分隊を初期化
 	if squad_manager:
@@ -91,9 +88,6 @@ func _ready() -> void:
 			if GameManager.is_online_match:
 				if "is_player_controlled" in child:
 					child.is_player_controlled = true
-					print("[GameScene] Disabled AI for enemy: %s" % child.name)
-
-	print("[GameScene] My team: %d, Enemies: %d" % [my_team_members.size(), enemies.size()])
 
 	# マップのスポーンポイントからキャラクターの位置を設定
 	_apply_spawn_positions_from_map(my_team_members, enemies)
@@ -136,18 +130,14 @@ func _on_squad_player_selected(player_data: RefCounted, _index: int) -> void:
 
 	# カメラは自動追従しない（2本指/WASDでのみ移動）
 
-	print("[GameScene] Player selected via SquadManager: %s" % selected_player.name)
-
 
 ## WallCollisionGeneratorからのコリジョン生成完了通知
 func _on_wall_collisions_generated(count: int) -> void:
-	print("[GameScene] Wall collisions generated: %d meshes" % count)
 	if grid_manager and count > 0:
 		# 物理エンジンへの登録を待ってから再スキャン
 		await get_tree().physics_frame
 		await get_tree().physics_frame  # 念のため2フレーム待つ
 		grid_manager.rescan_obstacles()
-		print("[GameScene] GridManager rescanned obstacles")
 
 
 func _exit_tree() -> void:
@@ -246,8 +236,6 @@ func _setup_squad_manager() -> void:
 	# GameManagerに登録
 	GameManager.register_squad_manager(squad_manager)
 
-	print("[GameScene] SquadManager initialized")
-
 
 ## FogOfWarManagerをセットアップ
 func _setup_fog_of_war_manager() -> void:
@@ -258,8 +246,6 @@ func _setup_fog_of_war_manager() -> void:
 
 	# GameManagerに登録
 	GameManager.register_fog_of_war_manager(fog_of_war_manager)
-
-	print("[GameScene] FogOfWarManager initialized")
 
 
 ## MatchManagerをセットアップ
@@ -272,17 +258,13 @@ func _setup_match_manager() -> void:
 	# GameManagerに登録
 	GameManager.register_match_manager(match_manager)
 
-	print("[GameScene] MatchManager initialized")
-
 
 ## マップメッシュに影設定を適用
 func _setup_map_shadows() -> void:
 	if not map_node:
-		print("[GameScene] Map node not found, skipping shadow setup")
 		return
 
-	var mesh_count := _apply_shadow_settings_recursive(map_node, 0)
-	print("[GameScene] Shadow settings applied to %d map meshes" % mesh_count)
+	_apply_shadow_settings_recursive(map_node, 0)
 
 
 ## 床のコリジョンを確実に配置（map.glbの床は表示したまま）
@@ -304,7 +286,6 @@ func _create_shadow_receiving_floor() -> void:
 	floor_collision.position = Vector3(8, -0.5, -8)
 
 	add_child(floor_collision)
-	print("[GameScene] Dynamic floor collision created at %s (size: 16x1x16)" % floor_collision.position)
 
 
 ## 再帰的にメッシュに影設定を適用
@@ -315,7 +296,6 @@ func _apply_shadow_settings_recursive(node: Node, count: int) -> int:
 		# 影を投げる・受ける設定
 		mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		count += 1
-		print("[GameScene] Shadow setup for mesh: %s (cast_shadow=%d)" % [mesh_instance.name, mesh_instance.cast_shadow])
 
 	for child in node.get_children():
 		count = _apply_shadow_settings_recursive(child, count)
@@ -346,8 +326,6 @@ func _setup_grid_system() -> void:
 	var wall_node = get_node_or_null("Wall")
 	if wall_node and wall_node.has_signal("collisions_generated"):
 		wall_node.collisions_generated.connect(_on_wall_collisions_generated)
-
-	print("[GameScene] GridManager initialized (16x16 grid)")
 
 
 ## パスシステムをセットアップ
@@ -411,7 +389,6 @@ func _setup_camera_system() -> void:
 			Vector3(0, 8, 0)
 		)
 		player_camera.fov = 45.0
-		print("[GameScene] Created new camera for player without Camera3D")
 
 	# Zファイティング対策: nearプレーンを調整
 	player_camera.near = 0.1
@@ -431,7 +408,6 @@ func _setup_camera_system() -> void:
 
 	# 初期カメラ位置をプレイヤー位置に設定（追従はしない）
 	camera_controller.snap_to_position(selected_player.global_position)
-	print("[GameScene] Camera snapped to player position: %s" % selected_player.global_position)
 
 
 ## Fog of Warレンダラーをセットアップ
@@ -445,8 +421,6 @@ func _setup_fog_of_war_renderer() -> void:
 
 	# 敵の初期可視性を設定（非表示から開始）
 	_initialize_enemy_fog_of_war.call_deferred()
-
-	print("[GameScene] Fog of War renderer initialized")
 
 
 ## 敵の視界初期化
@@ -510,7 +484,6 @@ func _on_execution_phase_started(_turn_number: int) -> void:
 
 			if player_node.has_method("set_path"):
 				player_node.set_path(waypoints)
-				print("[GameScene] Path applied to %s (%d waypoints)" % [player_node.name, waypoints.size()])
 
 
 ## ネットワーク同期をセットアップ
@@ -530,22 +503,17 @@ func _setup_network_sync() -> void:
 	# 有効化
 	network_sync_manager.activate()
 
-	# チーム割り当ては既にlobby_screen.gdで完了している
-	print("[GameScene] NetworkSyncManager initialized - My team: %s" % (
-		"CT" if GameManager.assigned_team == GameManager.Team.CT else "TERRORIST"
-	))
-
 
 ## リモートプレイヤー参加
-func _on_remote_player_joined(user_id: String, username: String) -> void:
-	print("[GameScene] Remote player joined: %s (%s)" % [username, user_id])
+func _on_remote_player_joined(_user_id: String, _username: String) -> void:
 	# TODO: リモートプレイヤーのキャラクターを生成
+	pass
 
 
 ## リモートプレイヤー離脱
-func _on_remote_player_left(user_id: String) -> void:
-	print("[GameScene] Remote player left: %s" % user_id)
+func _on_remote_player_left(_user_id: String) -> void:
 	# TODO: リモートプレイヤーのキャラクターを削除
+	pass
 
 
 ## リモートプレイヤー位置更新
@@ -576,13 +544,8 @@ func _on_remote_player_updated(user_id: String, character_name: String, position
 			"node": target_node
 		}
 	else:
-		# デバッグ：1回だけ子ノード一覧を出力
-		if not _debug_printed_children:
-			_debug_printed_children = true
-			var children_names = []
-			for child in enemy_team_node.get_children():
-				children_names.append(child.name)
-			print("[GameScene] Looking for '%s' but enemy team (%s) has children: %s" % [character_name, enemy_team_node.name, children_names])
+		# キャラクターが見つからない場合は何もしない
+		pass
 
 
 ## リモートプレイヤーの位置を補間
@@ -617,15 +580,14 @@ func _interpolate_remote_players(delta: float) -> void:
 
 
 ## リモートプレイヤーアクション
-func _on_remote_player_action(user_id: String, action_type: String, data: Dictionary) -> void:
-	print("[GameScene] Remote player action: %s -> %s" % [user_id, action_type])
+func _on_remote_player_action(_user_id: String, _action_type: String, _data: Dictionary) -> void:
 	# TODO: アクションに応じた処理
+	pass
 
 
 ## ゲーム状態更新
 func _on_game_state_updated(state: Dictionary) -> void:
 	var event_type = state.get("event", "")
-	print("[GameScene] Game state updated: %s" % event_type)
 
 	match event_type:
 		"match_ready":
@@ -637,9 +599,7 @@ func _on_game_state_updated(state: Dictionary) -> void:
 				match_manager.start_match()
 		"phase_change":
 			# フェーズ変更
-			var phase = state.get("phase", "")
-			var round_num = state.get("round", 0)
-			print("[GameScene] Phase changed to: %s (Round %d)" % [phase, round_num])
+			pass
 
 
 # =====================================
@@ -649,7 +609,6 @@ func _on_game_state_updated(state: Dictionary) -> void:
 ## マップのスポーンポイントからキャラクターの位置を設定
 func _apply_spawn_positions_from_map(my_team: Array[CharacterBody3D], enemy_team: Array[CharacterBody3D]) -> void:
 	if not map_node:
-		print("[GameScene] Map node not found, skipping spawn position setup")
 		return
 
 	# マップからCTとTのスポーンポイントを取得
@@ -662,8 +621,6 @@ func _apply_spawn_positions_from_map(my_team: Array[CharacterBody3D], enemy_team
 
 	# 直接の子ノードも確認
 	_find_spawn_points_recursive(map_node, ct_spawns, t_spawns)
-
-	print("[GameScene] Found spawn points - CT: %d, T: %d" % [ct_spawns.size(), t_spawns.size()])
 
 	# オンラインマッチの場合、割り当てられたチームに基づいてスポーンポイントを選択
 	var my_team_spawns: Array[Node3D]
@@ -689,7 +646,6 @@ func _apply_spawn_positions_from_map(my_team: Array[CharacterBody3D], enemy_team
 		# 初期武器を設定（AK47）
 		if my_team[i].has_method("set_weapon"):
 			my_team[i].set_weapon(CharacterSetup.WeaponId.AK47)
-		print("[GameScene] Spawned %s at %s, rot=%.1f" % [my_team[i].name, spawn_pos, rad_to_deg(adjusted_rot)])
 
 	# 敵チームの位置と向きを設定
 	for i in range(min(enemy_team.size(), enemy_team_spawns.size())):
@@ -703,7 +659,6 @@ func _apply_spawn_positions_from_map(my_team: Array[CharacterBody3D], enemy_team
 		# 初期武器を設定（AK47）
 		if enemy_team[i].has_method("set_weapon"):
 			enemy_team[i].set_weapon(CharacterSetup.WeaponId.AK47)
-		print("[GameScene] Spawned %s at %s, rot=%.1f" % [enemy_team[i].name, spawn_pos, rad_to_deg(adjusted_rot)])
 
 
 ## スポーンポイントを再帰的に検索
@@ -720,8 +675,6 @@ func _find_spawn_points_recursive(node: Node, ct_spawns: Array[Node3D], t_spawns
 
 ## デバッグ用：キャラクターを近くにスポーン
 func _apply_debug_spawn_positions(my_team: Array[CharacterBody3D], enemy_team: Array[CharacterBody3D]) -> void:
-	print("[GameScene] Applying debug spawn positions (nearby)")
-
 	# 中心位置（マップの中央付近）
 	var center_pos = Vector3(0, 1, 0)
 
@@ -731,7 +684,6 @@ func _apply_debug_spawn_positions(my_team: Array[CharacterBody3D], enemy_team: A
 		var char = my_team[i]
 		var spawn_pos = center_pos + my_team_offset + Vector3(0, 0, i * 2)
 		char.global_position = spawn_pos
-		print("[GameScene] Moved %s to %s" % [char.name, spawn_pos])
 
 	# 敵チームは中心から+5の位置に配置
 	var enemy_team_offset = Vector3(5, 0, 0)
@@ -739,4 +691,3 @@ func _apply_debug_spawn_positions(my_team: Array[CharacterBody3D], enemy_team: A
 		var char = enemy_team[i]
 		var spawn_pos = center_pos + enemy_team_offset + Vector3(0, 0, i * 2)
 		char.global_position = spawn_pos
-		print("[GameScene] Moved %s to %s" % [char.name, spawn_pos])

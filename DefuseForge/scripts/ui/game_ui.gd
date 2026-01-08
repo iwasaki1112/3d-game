@@ -129,22 +129,17 @@ func _on_money_changed_event(_player: Node3D, amount: int) -> void:
 
 ## 購入フェーズ開始
 func _on_buy_phase_started() -> void:
-	print("[GameUI] Buy phase started")
 	if shopping_panel:
 		shopping_panel.visible = true
-	else:
-		print("[GameUI] ERROR: shopping_panel is null!")
 
 
 ## プレイフェーズ開始
 func _on_play_phase_started() -> void:
-	print("[GameUI] Play phase started")
 	shopping_panel.visible = false
 
 
 ## ゲームオーバー
 func _on_game_over(_winner_team: int) -> void:
-	print("[GameUI] Game over")
 	shopping_panel.visible = false
 	_show_game_over()
 
@@ -153,11 +148,8 @@ func _on_round_started(_round_number: int) -> void:
 	_update_round()
 
 
-func _on_round_ended(winner_team: int) -> void:
+func _on_round_ended(_winner_team: int) -> void:
 	_update_round()
-	# ラウンド終了メッセージを表示（オプション）
-	var winner_text := "CT" if winner_team == 0 else "Terrorist"
-	print("%s wins the round!" % winner_text)
 
 
 func _show_game_over() -> void:
@@ -207,13 +199,8 @@ func _on_pistol_button_pressed() -> void:
 
 
 func _buy_weapon(weapon_id: int) -> void:
-	var weapon_data = CharacterSetup.get_weapon_data(weapon_id)
-
 	# 購入処理（SquadManager経由で武器IDベースで購入）
-	if GameManager.buy_weapon_for_selected(weapon_id):
-		print("[GameUI] Bought weapon: %s for $%d" % [weapon_data.name, weapon_data.price])
-	else:
-		print("[GameUI] Cannot buy weapon: %s (need $%d, have $%d)" % [weapon_data.name, weapon_data.price, GameManager.player_money])
+	GameManager.buy_weapon_for_selected(weapon_id)
 
 
 func _update_weapon_button_texts() -> void:
@@ -295,8 +282,7 @@ func _on_path_time_changed(current_time: float, max_time: float) -> void:
 
 
 ## 戦略フェーズ開始
-func _on_strategy_phase_started(turn_number: int) -> void:
-	print("[GameUI] Strategy phase started (Turn %d)" % turn_number)
+func _on_strategy_phase_started(_turn_number: int) -> void:
 	shopping_panel.visible = false
 	# パス時間UIを表示
 	if path_time_container:
@@ -310,8 +296,7 @@ func _on_strategy_phase_started(turn_number: int) -> void:
 
 
 ## 実行フェーズ開始
-func _on_execution_phase_started(turn_number: int) -> void:
-	print("[GameUI] Execution phase started (Turn %d)" % turn_number)
+func _on_execution_phase_started(_turn_number: int) -> void:
 	# パス時間UIを非表示
 	if path_time_container:
 		path_time_container.visible = false

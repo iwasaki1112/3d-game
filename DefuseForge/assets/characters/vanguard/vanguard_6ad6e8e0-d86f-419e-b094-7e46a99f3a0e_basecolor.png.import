@@ -2,15 +2,12 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bfaxmm5ribgr7"
+uid="uid://1s55npv0tfwl"
 path.s3tc="res://.godot/imported/vanguard_6ad6e8e0-d86f-419e-b094-7e46a99f3a0e_basecolor.png-6840ea5bf97e7b049361586cb8640f5c.s3tc.ctex"
 path.etc2="res://.godot/imported/vanguard_6ad6e8e0-d86f-419e-b094-7e46a99f3a0e_basecolor.png-6840ea5bf97e7b049361586cb8640f5c.etc2.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
-}
-generator_parameters={
-"md5": "8b371722bfd65de1abc1ee65688871af"
 }
 
 [deps]

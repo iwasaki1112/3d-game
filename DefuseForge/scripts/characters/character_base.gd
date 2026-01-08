@@ -171,8 +171,6 @@ func _setup_animation_tree(model: Node3D) -> void:
 	# AnimationTreeを有効化
 	anim_tree.active = true
 
-	print("[%s] AnimationTree setup complete (locomotion: %s, shoot: %s)" % [name, idle_anim, shoot_anim_name])
-
 
 ## 上半身ボーンのフィルターを設定
 func _setup_upper_body_filter(blend_node: AnimationNodeBlend2) -> void:
@@ -422,7 +420,6 @@ func _play_current_animation() -> void:
 		else:
 			# AnimationTreeが無効な場合はAnimationPlayerを直接使用
 			anim_player.play(anim_name, ANIM_BLEND_TIME)
-		print("[%s] Playing animation: %s" % [name, anim_name])
 
 	# 武器位置を更新
 	_update_weapon_position()
@@ -460,15 +457,6 @@ func take_damage(amount: float, attacker: Node3D = null, is_headshot: bool = fal
 	health -= amount
 	damaged.emit(int(amount), attacker, is_headshot)
 
-	var hs_text = " (HEADSHOT)" if is_headshot else ""
-	print("[%s] Took %d damage%s from %s (HP: %.0f)" % [
-		name,
-		int(amount),
-		hs_text,
-		attacker.name if attacker else "unknown",
-		health
-	])
-
 	if health <= 0:
 		health = 0
 		_die(attacker)
@@ -503,7 +491,6 @@ func play_dying_animation() -> void:
 
 	if anim_player and anim_player.has_animation("dying"):
 		anim_player.play("dying")
-		print("[%s] Playing dying animation" % name)
 
 
 ## 回復
@@ -549,8 +536,7 @@ func set_weapon_type(weapon_type: int) -> void:
 	# 射撃アニメーションも更新
 	_update_shoot_animation()
 
-	var weapon_name = CharacterSetup.WEAPON_TYPE_NAMES.get(weapon_type, "unknown")
-	print("[%s] Weapon type changed to: %s (speed: %.1f/%.1f)" % [name, weapon_name, walk_speed, run_speed])
+	var _weapon_name = CharacterSetup.WEAPON_TYPE_NAMES.get(weapon_type, "unknown")
 
 
 ## 射撃アニメーションを更新（武器タイプ変更時）
@@ -572,7 +558,6 @@ func _update_shoot_animation() -> void:
 	var shoot_node = anim_blend_tree.get_node("shoot") as AnimationNodeAnimation
 	if shoot_node:
 		shoot_node.animation = shoot_anim_name
-		print("[%s] Shoot animation updated to: %s" % [name, shoot_anim_name])
 
 
 ## 現在の武器タイプを取得
@@ -609,8 +594,7 @@ func set_weapon(weapon_id: int) -> void:
 	if combat_component:
 		combat_component.on_weapon_changed(weapon_id)
 
-	var weapon_data = CharacterSetup.get_weapon_data(weapon_id)
-	print("[%s] Weapon changed to: %s" % [name, weapon_data.name])
+	var _weapon_data = CharacterSetup.get_weapon_data(weapon_id)
 
 
 ## 現在の武器IDを取得
@@ -751,8 +735,6 @@ func _play_walk_sequence_anim(phase: String, blend_time: float) -> void:
 			locomotion_node.animation = anim_name
 	else:
 		anim_player.play(anim_name, blend_time)
-
-	print("[%s] Walk sequence: %s -> %s" % [name, phase, anim_name])
 
 
 ## 歩行シーケンス終了処理
