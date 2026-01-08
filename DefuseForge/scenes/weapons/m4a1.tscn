@@ -4,12 +4,12 @@
 [ext_resource type="PackedScene" path="res://scenes/effects/muzzle_flash.tscn" id="2_muzzle_flash"]
 
 [node name="M4A1" type="Node3D"]
-transform = Transform3D(-0.19077997, 0.9814777, -0.017452406, 0.98162717, 0.19080903, 8.742278e-08, 0.0033301625, -0.017131738, -0.9998477, -0.04, 0.29, 0.02)
 
 [node name="Model" parent="." instance=ExtResource("1_m4a1")]
+transform = Transform3D(-0.122404546, 0.629717, -0.55765015, 0.83438313, 0.1621876, 0, 0.10640463, -0.5474045, -0.6415032, -0.03, 0.29, 0.02)
 
-[node name="MuzzlePoint" type="Node3D" parent="."]
+[node name="MuzzlePoint" type="Node3D" parent="Model"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0.5)
 
-[node name="MuzzleFlash" parent="MuzzlePoint" instance=ExtResource("2_muzzle_flash")]
+[node name="MuzzleFlash" parent="Model/MuzzlePoint" instance=ExtResource("2_muzzle_flash")]
 transform = Transform3D(-4.371137e-08, 0, 0.9999996, 0, 1, 0, -0.9999996, 0, -4.371137e-08, 0.49652305, 0.119413406, -0.5180719)

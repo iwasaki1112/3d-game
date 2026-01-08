@@ -10,10 +10,10 @@ height = 1.8
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
-background_color = Color(0.2, 0.2, 0.25, 1)
+background_color = Color(0.25, 0.25, 0.3, 1)
 ambient_light_source = 2
-ambient_light_color = Color(0.6, 0.6, 0.65, 1)
-ambient_light_energy = 0.5
+ambient_light_color = Color(0.8, 0.8, 0.85, 1)
+ambient_light_energy = 0.8
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_1"]
 size = Vector2(20, 20)
@@ -43,6 +43,7 @@ distance = 4.0
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.866025, -0.25, 0.433013, 0, 0.866025, 0.5, -0.5, -0.433013, 0.75, 5, 10, 5)
+light_energy = 1.2
 shadow_enabled = true
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
