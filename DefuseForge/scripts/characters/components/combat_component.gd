@@ -11,6 +11,9 @@ signal target_acquired(target: Node3D)
 signal target_lost()
 signal fired(target: Node3D, hit: bool, damage: int)
 signal killed(target: Node3D)
+signal ammo_changed(current: int, max: int)
+signal reload_started()
+signal reload_completed()
 
 ## 部位判定の結果
 enum HitZone { MISS, BODY, HEAD }
@@ -42,6 +45,14 @@ var _visible_enemies: Array[Node3D] = []
 var _shooting_state_timer: float = 0.0
 const SHOOTING_STATE_DURATION: float = 0.5
 
+# 弾数管理
+var current_ammo: int = 0
+var max_ammo: int = 0
+var _is_reloading: bool = false
+
+# ActionStateへの参照
+const ActionState = preload("res://scripts/resources/action_state.gd")
+
 
 func _ready() -> void:
 	character = get_parent() as CharacterBody3D
@@ -51,7 +62,14 @@ func _ready() -> void:
 
 	# 武器データの初期化
 	_update_weapon_data()
-	print("[CombatComponent] %s initialized, weapon_damage=%d" % [character.name, weapon_data.get("damage", 0)])
+
+	# リロード完了シグナルを接続
+	if character.has_signal("action_completed"):
+		character.action_completed.connect(_on_action_completed)
+
+	print("[CombatComponent] %s initialized, weapon_damage=%d, ammo=%d/%d" % [
+		character.name, weapon_data.get("damage", 0), current_ammo, max_ammo
+	])
 
 
 func _process(delta: float) -> void:
@@ -75,8 +93,17 @@ func _process(delta: float) -> void:
 	# ターゲット更新
 	_update_target()
 
-	# スプリント中は射撃不可
-	if character.is_running:
+	# アクション状態に基づく射撃可否チェック
+	if character.has_method("can_shoot") and not character.can_shoot():
+		return
+
+	# リロード中は射撃不可
+	if _is_reloading:
+		return
+
+	# 弾切れチェック → 自動リロード
+	if current_ammo <= 0 and max_ammo > 0:
+		_start_reload()
 		return
 
 	# 攻撃実行
@@ -169,10 +196,20 @@ func _update_weapon_data() -> void:
 	else:
 		weapon_data = CharacterSetup.get_weapon_data(CharacterSetup.WeaponId.NONE)
 
+	# 弾数を初期化
+	max_ammo = weapon_data.get("magazine_size", 0)
+	current_ammo = max_ammo
+	ammo_changed.emit(current_ammo, max_ammo)
+
 
 ## 武器変更時に呼び出す
 func on_weapon_changed(weapon_id: int) -> void:
 	weapon_data = CharacterSetup.get_weapon_data(weapon_id)
+	# 弾数を初期化
+	max_ammo = weapon_data.get("magazine_size", 0)
+	current_ammo = max_ammo
+	_is_reloading = false
+	ammo_changed.emit(current_ammo, max_ammo)
 
 
 ## 視界内の敵リストを更新（外部から呼び出される）
@@ -241,6 +278,14 @@ func _execute_attack() -> void:
 	# 武器がない場合は攻撃しない
 	if weapon_data.damage <= 0:
 		return
+
+	# 弾がない場合は攻撃しない
+	if current_ammo <= 0:
+		return
+
+	# 弾を消費
+	current_ammo -= 1
+	ammo_changed.emit(current_ammo, max_ammo)
 
 	# 発砲クールダウン設定
 	_fire_cooldown = weapon_data.fire_rate
@@ -381,4 +426,39 @@ func reset() -> void:
 	current_target = null
 	_fire_cooldown = 0.0
 	_visible_enemies.clear()
+	_is_reloading = false
 	_update_weapon_data()
+
+
+## リロードを開始
+func _start_reload() -> void:
+	if _is_reloading or max_ammo <= 0:
+		return
+
+	var reload_time = weapon_data.get("reload_time", 2.0)
+	_is_reloading = true
+
+	# アクションシステムを使用してリロード開始
+	if character.has_method("start_action"):
+		character.start_action(ActionState.ActionType.RELOAD, reload_time)
+
+	reload_started.emit()
+	print("[CombatComponent] %s started reload (%.1fs)" % [character.name, reload_time])
+
+
+## アクション完了時のコールバック
+func _on_action_completed(action_type: int) -> void:
+	if action_type == ActionState.ActionType.RELOAD:
+		_finish_reload()
+
+
+## リロード完了
+func _finish_reload() -> void:
+	if not _is_reloading:
+		return
+
+	_is_reloading = false
+	current_ammo = max_ammo
+	ammo_changed.emit(current_ammo, max_ammo)
+	reload_completed.emit()
+	print("[CombatComponent] %s reload completed, ammo=%d/%d" % [character.name, current_ammo, max_ammo])

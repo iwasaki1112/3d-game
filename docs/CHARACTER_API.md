@@ -2,7 +2,123 @@
 
 キャラクター操作の統一APIリファレンスです。すべての操作は`CharacterAPI`クラスの静的メソッドで提供されます。
 
-## 概要
+## クイックスタート
+
+### 1. キャラクターを生成して配置（最もシンプル）
+
+```gdscript
+# プレイヤーをAK-47装備で生成・配置
+var player = CharacterAPI.create("player", CharacterSetup.WeaponId.AK47)
+CharacterAPI.spawn(player, self, Vector3(0, 0, 0))
+
+# 敵をGlock装備で生成・配置
+var enemy = CharacterAPI.create("enemies", CharacterSetup.WeaponId.GLOCK)
+CharacterAPI.spawn(enemy, self, Vector3(0, 0, -5), PI)  # 180度回転
+```
+
+### 2. プリセットシーンを使用（エディタで調整可能）
+
+```gdscript
+# プリセットからインスタンス化
+var player = preload("res://scenes/characters/player_base.tscn").instantiate()
+player.global_position = Vector3(0, 0, 0)
+add_child(player)
+player.set_weapon(CharacterSetup.WeaponId.AK47)
+
+# または CharacterAPI.create_from_preset を使用
+var enemy = CharacterAPI.create_from_preset("enemy", CharacterSetup.WeaponId.GLOCK)
+CharacterAPI.spawn(enemy, self, Vector3(0, 0, -5))
+```
+
+### 3. 既存キャラクターを操作
+
+```gdscript
+CharacterAPI.equip_weapon(player, CharacterSetup.WeaponId.AK47)
+CharacterAPI.move_to(player, Vector3(10, 0, 5), true)
+CharacterAPI.set_fov(player, 90.0)
+```
+
+---
+
+## キャラクター生成API
+
+### create
+プログラムでキャラクターを生成します。
+
+```gdscript
+# 基本的な生成
+var player = CharacterAPI.create("player", CharacterSetup.WeaponId.AK47)
+
+# カスタムモデルを使用
+var enemy = CharacterAPI.create("enemies", CharacterSetup.WeaponId.GLOCK, "res://assets/characters/custom.glb")
+
+# 戦闘なしキャラクター（NPC用）
+var npc = CharacterAPI.create("", CharacterSetup.WeaponId.NONE, "", false)
+```
+
+| パラメータ | 型 | 説明 |
+|-----------|-----|------|
+| team | String | チーム名（"player" or "enemies"）デフォルト: "player" |
+| weapon_id | int | 武器ID（CharacterSetup.WeaponId）デフォルト: NONE |
+| model_path | String | GLBモデルパス（省略時はデフォルトモデル） |
+| with_combat | bool | CombatComponentを追加するか デフォルト: true |
+
+**戻り値:** `CharacterBase` - 生成されたキャラクター
+
+**自動セットアップ内容:**
+- CharacterBaseスクリプト
+- CollisionShape3D（CapsuleShape3D）
+- CharacterModel（GLBモデル）
+- CombatComponent（with_combat=true時）
+- グループ追加（team指定時）
+- AnimationTree（上半身/下半身ブレンド）
+- 武器装備とアニメーション
+
+### create_from_preset
+プリセットシーンからキャラクターを生成します。
+
+```gdscript
+var player = CharacterAPI.create_from_preset("player", CharacterSetup.WeaponId.AK47)
+var enemy = CharacterAPI.create_from_preset("enemy", CharacterSetup.WeaponId.GLOCK)
+```
+
+| パラメータ | 型 | 説明 |
+|-----------|-----|------|
+| preset | String | プリセット名（"player", "enemy", "ally"） |
+| weapon_id | int | 武器ID デフォルト: NONE |
+
+**戻り値:** `CharacterBase` - 生成されたキャラクター
+
+**利用可能なプリセット:**
+| プリセット | シーンパス | チーム |
+|-----------|----------|--------|
+| player | `res://scenes/characters/player_base.tscn` | player |
+| enemy | `res://scenes/characters/enemy_base.tscn` | enemies |
+| ally | `res://scenes/characters/ally_base.tscn` | player |
+
+### spawn
+キャラクターをシーンに配置します。
+
+```gdscript
+var player = CharacterAPI.create("player", CharacterSetup.WeaponId.AK47)
+CharacterAPI.spawn(player, get_tree().current_scene, Vector3(0, 0, 0))
+
+# 回転も指定
+CharacterAPI.spawn(enemy, self, Vector3(0, 0, -5), PI)  # 180度回転
+```
+
+| パラメータ | 型 | 説明 |
+|-----------|-----|------|
+| character | CharacterBase | 配置するキャラクター |
+| parent | Node | 親ノード |
+| position | Vector3 | 配置位置 |
+| rotation_y | float | Y軸回転（ラジアン）デフォルト: 0.0 |
+
+**戻り値:** `void`
+
+---
+
+## 概要（レガシー）
 
 ```gdscript
 # 基本的な使用方法

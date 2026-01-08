@@ -5,6 +5,7 @@ extends CharacterBody3D
 ## 移動、アニメーション、地形追従の共通機能を提供
 
 # CharacterSetup はグローバルクラス名として登録されているため、直接参照可能
+const ActionState = preload("res://scripts/resources/action_state.gd")
 
 signal path_completed
 signal waypoint_reached(index: int)
@@ -12,6 +13,9 @@ signal died(killer: Node3D)
 signal damaged(amount: int, attacker: Node3D, is_headshot: bool)
 signal weapon_type_changed(weapon_type: int)
 signal weapon_changed(weapon_id: int)
+signal locomotion_changed(new_state: int)
+signal action_started(action_type: int)
+signal action_completed(action_type: int)
 
 @export_group("移動設定")
 @export var base_walk_speed: float = 3.0
@@ -33,6 +37,11 @@ var waypoints: Array = []  # Array of {position: Vector3, run: bool}
 var current_waypoint_index: int = 0
 var is_moving: bool = false
 var is_running: bool = false
+
+# アクション状態管理
+var locomotion_state: int = ActionState.LocomotionState.IDLE
+var current_action: int = ActionState.ActionType.NONE
+var _action_timer: float = 0.0
 
 # アニメーション
 var anim_player: AnimationPlayer = null
@@ -219,6 +228,9 @@ func _physics_process(delta: float) -> void:
 	if not is_alive:
 		return
 
+	# アクション状態を更新（タイマーベースの自動終了）
+	_update_action_state(delta)
+
 	# 射撃ブレンドを更新
 	_update_shooting_blend(delta)
 
@@ -241,6 +253,93 @@ func _can_execute_movement() -> bool:
 	if GameManager and GameManager.match_manager:
 		return GameManager.match_manager.can_execute_movement()
 	return true  # MatchManagerがなければ許可
+
+
+# ========================================
+# アクション状態管理
+# ========================================
+
+## 射撃可能かどうかを判定
+func can_shoot() -> bool:
+	# 移動状態をチェック
+	if not ActionState.can_shoot_in_locomotion(locomotion_state):
+		return false
+	# 一時アクションをチェック
+	if not ActionState.can_shoot_in_action(current_action):
+		return false
+	return true
+
+
+## 移動状態を設定
+func set_locomotion_state(state: int) -> void:
+	if locomotion_state == state:
+		return
+	locomotion_state = state
+	locomotion_changed.emit(state)
+
+
+## 一時アクションを開始
+## @param action_type: ActionType enum値
+## @param duration: アクション持続時間（秒）、0なら手動終了
+func start_action(action_type: int, duration: float = 0.0) -> bool:
+	# 既にアクション中なら開始不可
+	if current_action != ActionState.ActionType.NONE:
+		return false
+	current_action = action_type
+	_action_timer = duration
+	action_started.emit(action_type)
+
+	# アクションに応じたアニメーションを再生
+	_play_action_animation(action_type)
+	return true
+
+
+## 一時アクションを終了
+func end_action() -> void:
+	if current_action == ActionState.ActionType.NONE:
+		return
+	var completed_action = current_action
+	current_action = ActionState.ActionType.NONE
+	_action_timer = 0.0
+	action_completed.emit(completed_action)
+
+	# アクション終了後、通常アニメーションに戻る
+	_play_current_animation()
+
+
+## アクションに応じたアニメーションを再生
+func _play_action_animation(action_type: int) -> void:
+	if anim_player == null:
+		return
+
+	var anim_name: String = ""
+
+	match action_type:
+		ActionState.ActionType.RELOAD:
+			anim_name = CharacterSetup.get_animation_name("reload", current_weapon_type)
+		ActionState.ActionType.OPEN_DOOR:
+			anim_name = "open_door"
+		_:
+			return  # アニメーションなし
+
+	# フォールバック
+	if not anim_player.has_animation(anim_name):
+		anim_name = CharacterSetup.get_animation_name("reload", CharacterSetup.WeaponType.RIFLE)
+
+	if anim_player.has_animation(anim_name):
+		# AnimationTreeを一時的に無効化してアクションアニメーションを直接再生
+		if anim_tree and anim_tree.active:
+			anim_tree.active = false
+		anim_player.play(anim_name, ANIM_BLEND_TIME)
+		print("[CharacterBase] Playing action animation: %s" % anim_name)
+
+
+## アクション状態の更新（タイマーベースの自動終了）
+func _update_action_state(delta: float) -> void:
+	if _action_timer > 0:
+		_action_timer -= delta
+		if _action_timer <= 0:
+			end_action()
 
 
 ## 射撃ブレンドを更新
@@ -276,6 +375,11 @@ func _handle_path_movement(delta: float) -> void:
 		var waypoint: Dictionary = waypoints[current_waypoint_index]
 		var target: Vector3 = waypoint.position
 		is_running = waypoint.run
+		# locomotion_state を同期
+		if is_running:
+			set_locomotion_state(ActionState.LocomotionState.SPRINT)
+		else:
+			set_locomotion_state(ActionState.LocomotionState.WALK)
 
 		var direction := (target - global_position)
 		direction.y = 0
@@ -326,8 +430,10 @@ func set_path(new_waypoints: Array) -> void:
 ## 移動停止
 func _stop_moving() -> void:
 	is_moving = false
+	is_running = false
 	waypoints.clear()
 	current_waypoint_index = 0
+	set_locomotion_state(ActionState.LocomotionState.IDLE)
 
 
 ## 移動を中断
@@ -412,6 +518,10 @@ func _play_current_animation() -> void:
 					anim_name = CharacterSetup.get_animation_name("walking", fallback_type)
 
 	if anim_player.has_animation(anim_name):
+		# AnimationTreeを再有効化（アクション後に無効化されている場合）
+		if anim_tree and not anim_tree.active and anim_blend_tree:
+			anim_tree.active = true
+
 		# AnimationTreeが有効な場合は、locomotionノードのアニメーションを更新
 		if anim_tree and anim_tree.active and anim_blend_tree:
 			var locomotion_node = anim_blend_tree.get_node("locomotion") as AnimationNodeAnimation
@@ -467,6 +577,10 @@ func _die(killer: Node3D = null, was_headshot: bool = false) -> void:
 	is_alive = false
 	is_moving = false
 
+	var killer_name = killer.name if killer else "unknown"
+	var headshot_str = " (HEADSHOT)" if was_headshot else ""
+	print("[CharacterBase] %s died! Killed by %s%s" % [name, killer_name, headshot_str])
+
 	# CombatComponentを無効化
 	var combat = get_node_or_null("CombatComponent")
 	if combat:
@@ -489,8 +603,23 @@ func play_dying_animation() -> void:
 	if anim_tree:
 		anim_tree.active = false
 
-	if anim_player and anim_player.has_animation("dying"):
-		anim_player.play("dying")
+	if not anim_player:
+		return
+
+	# 死亡アニメーションを探す（複数の候補から選択）
+	var dying_animations = ["dying", "dying_left", "dying_3", "Rifle_Death_R", "Rifle_Death_L", "Rifle_Death_3"]
+	var selected_anim: String = ""
+
+	for anim_name in dying_animations:
+		if anim_player.has_animation(anim_name):
+			selected_anim = anim_name
+			break
+
+	if selected_anim != "":
+		anim_player.play(selected_anim, ANIM_BLEND_TIME)
+		print("[CharacterBase] %s playing death animation: %s" % [name, selected_anim])
+	else:
+		push_warning("[CharacterBase] %s has no death animation available" % name)
 
 
 ## 回復

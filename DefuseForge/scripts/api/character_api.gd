@@ -548,6 +548,134 @@ static func set_model_textures(character: CharacterBase, albedo_path: String, no
 
 
 ## ========================================
+## キャラクター生成API（ファクトリ）
+## ========================================
+
+## キャラクターを生成
+## @param model_path: GLBモデルパス（省略時はデフォルトモデル）
+## @param team: チーム名 ("player" または "enemies")
+## @param weapon_id: 初期装備武器ID（省略時は武器なし）
+## @param with_combat: CombatComponentを追加するか
+## @return: 生成されたCharacterBase
+## @example:
+##   var player = CharacterAPI.create("player", CharacterSetup.WeaponId.AK47)
+##   var enemy = CharacterAPI.create("enemies", CharacterSetup.WeaponId.GLOCK, "res://assets/characters/enemy.glb")
+static func create(
+	team: String = "player",
+	weapon_id: int = CharacterSetup.WeaponId.NONE,
+	model_path: String = "",
+	with_combat: bool = true
+) -> CharacterBase:
+	# デフォルトモデル
+	if model_path.is_empty():
+		model_path = "res://assets/characters/vanguard/vanguard.glb"
+
+	# CharacterBody3Dを作成
+	var character = CharacterBody3D.new()
+	character.collision_layer = 1
+	character.collision_mask = 3
+
+	# CharacterBaseスクリプトをアタッチ
+	var script = load("res://scripts/characters/character_base.gd")
+	character.set_script(script)
+
+	# グループに追加
+	if not team.is_empty():
+		character.add_to_group(team)
+
+	# コリジョンシェイプを追加
+	var collision = CollisionShape3D.new()
+	collision.name = "CollisionShape3D"
+	var capsule = CapsuleShape3D.new()
+	capsule.radius = 0.3
+	capsule.height = 1.8
+	collision.shape = capsule
+	collision.position = Vector3(0, 0.95, 0)
+	character.add_child(collision)
+
+	# モデルを追加
+	if ResourceLoader.exists(model_path):
+		var model_scene = load(model_path)
+		if model_scene:
+			var model = model_scene.instantiate()
+			model.name = "CharacterModel"
+			character.add_child(model)
+
+	# CombatComponentを追加
+	if with_combat:
+		var combat_script = load("res://scripts/characters/components/combat_component.gd")
+		if combat_script:
+			var combat = Node.new()
+			combat.name = "CombatComponent"
+			combat.set_script(combat_script)
+			character.add_child(combat)
+
+	# 武器を装備（_ready後に実行するためdeferred）
+	if weapon_id != CharacterSetup.WeaponId.NONE:
+		character.set_deferred("current_weapon_id", weapon_id)
+		# _readyで武器をセット
+		character.ready.connect(func():
+			character.set_weapon(weapon_id)
+		, CONNECT_ONE_SHOT)
+
+	return character
+
+
+## プリセットシーンからキャラクターを生成
+## @param preset: プリセット名 ("player", "enemy", "ally")
+## @param weapon_id: 初期装備武器ID
+## @return: 生成されたCharacterBase
+## @example:
+##   var player = CharacterAPI.create_from_preset("player", CharacterSetup.WeaponId.AK47)
+static func create_from_preset(preset: String, weapon_id: int = CharacterSetup.WeaponId.NONE) -> CharacterBase:
+	var scene_path: String
+	match preset:
+		"player":
+			scene_path = "res://scenes/characters/player_base.tscn"
+		"enemy":
+			scene_path = "res://scenes/characters/enemy_base.tscn"
+		"ally":
+			scene_path = "res://scenes/characters/ally_base.tscn"
+		_:
+			push_warning("[CharacterAPI] Unknown preset: %s" % preset)
+			return null
+
+	if not ResourceLoader.exists(scene_path):
+		# プリセットシーンがない場合はファクトリで生成
+		var team = "player" if preset == "player" or preset == "ally" else "enemies"
+		return create(team, weapon_id)
+
+	var scene = load(scene_path)
+	if not scene:
+		return null
+
+	var character = scene.instantiate() as CharacterBase
+	if character and weapon_id != CharacterSetup.WeaponId.NONE:
+		character.ready.connect(func():
+			character.set_weapon(weapon_id)
+		, CONNECT_ONE_SHOT)
+
+	return character
+
+
+## キャラクターをシーンに配置
+## @param character: 配置するキャラクター
+## @param parent: 親ノード
+## @param position: 配置位置
+## @param rotation_y: Y軸回転（ラジアン）
+## @example:
+##   var player = CharacterAPI.create("player", CharacterSetup.WeaponId.AK47)
+##   CharacterAPI.spawn(player, get_tree().current_scene, Vector3(0, 0, 0))
+static func spawn(character: CharacterBase, parent: Node, position: Vector3, rotation_y: float = 0.0) -> void:
+	if not is_instance_valid(character) or not is_instance_valid(parent):
+		return
+
+	parent.add_child(character)
+	character.global_position = position
+	character.rotation.y = rotation_y
+
+
+## ========================================
 ## ユーティリティ
 ## ========================================
 

@@ -42,6 +42,8 @@ const WEAPON_DATA := {
 		"range": 0.0,
 		"headshot_multiplier": 1.0,
 		"bodyshot_multiplier": 1.0,
+		"magazine_size": 0,
+		"reload_time": 0.0,
 		"scene_path": "",
 		"kill_reward": 300
 	},
@@ -55,6 +57,8 @@ const WEAPON_DATA := {
 		"range": 20.0,
 		"headshot_multiplier": 4.0,
 		"bodyshot_multiplier": 1.0,
+		"magazine_size": 30,
+		"reload_time": 2.5,
 		"scene_path": "res://scenes/weapons/ak47.tscn",
 		"kill_reward": 300
 	},
@@ -68,6 +72,8 @@ const WEAPON_DATA := {
 		"range": 12.0,
 		"headshot_multiplier": 4.0,
 		"bodyshot_multiplier": 1.0,
+		"magazine_size": 12,
+		"reload_time": 1.8,
 		"scene_path": "",
 		"kill_reward": 300
 	}
@@ -411,8 +417,47 @@ static func load_animations(anim_player: AnimationPlayer, model: Node, debug_nam
 	if lib == null:
 		return
 
-	# Rifle Animset Proからアニメーションを読み込み
+	# Rifle Animset Proからアニメーションを読み込み（外部FBXファイルから）
 	_load_rifle_animset_pro_animations(lib, model, debug_name)
+
+	# 外部FBXからの読み込みが失敗した場合、GLB埋め込みアニメーションを使用
+	# idle_rifleが存在しなければフォールバック
+	if not lib.has_animation("idle_rifle"):
+		_load_embedded_animations_as_aliases(lib, anim_player)
+
+
+## GLB埋め込みアニメーションを内部名にマッピング（フォールバック用）
+static func _load_embedded_animations_as_aliases(lib: AnimationLibrary, anim_player: AnimationPlayer) -> void:
+	# GLBのアニメーション名 -> 内部アニメーション名のマッピング
+	var glb_to_internal := {
+		"Rifle_Idle": ["idle_rifle", "idle_pistol", "idle_none"],
+		"Rifle_WalkFwdLoop": ["walking_rifle", "walking_pistol", "walking_none"],
+		"Rifle_SprintLoop": ["running_rifle", "running_pistol", "running_none"],
+		"Rifle_Reload_2": ["reload_rifle"],
+		"Rifle_Death_R": ["dying"],
+		"Rifle_Death_L": ["dying_left"],
+		"Rifle_Death_3": ["dying_3"],
+		"Rifle_CrouchLoop": ["crouch_rifle", "crouch_pistol", "crouch_none"],
+		"Rifle_OpenDoor": ["open_door"]
+	}
+
+	var loaded_count := 0
+	for glb_name in glb_to_internal.keys():
+		if anim_player.has_animation(glb_name):
+			var anim = anim_player.get_animation(glb_name)
+			if anim:
+				var internal_names: Array = glb_to_internal[glb_name]
+				for internal_name in internal_names:
+					if not lib.has_animation(internal_name):
+						var anim_copy = anim.duplicate()
+						# ループ設定
+						if internal_name.contains("idle") or internal_name.contains("walking") or internal_name.contains("running") or internal_name.contains("crouch"):
+							anim_copy.loop_mode = Animation.LOOP_LINEAR
+						lib.add_animation(internal_name, anim_copy)
+						loaded_count += 1
+
+	if loaded_count > 0:
+		print("[CharacterSetup] Loaded %d animations from GLB fallback" % loaded_count)
 
 
 ## Rifle Animset Proからアニメーションを読み込む
