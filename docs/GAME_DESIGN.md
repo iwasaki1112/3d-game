@@ -169,7 +169,7 @@ func _ready() -> void:
 │   └── data/modules/
 │       ├── main.lua              # RPC定義
 │       └── supportrate_match.lua # マッチハンドラー
-└── SupportRateGame/              # Godotプロジェクト
+└── DefuseForge/              # Godotプロジェクト
     ├── scenes/
     │   ├── game.tscn                 # メインゲームシーン
     │   ├── title.tscn                # タイトル画面

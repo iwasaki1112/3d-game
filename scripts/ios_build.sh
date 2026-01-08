@@ -6,7 +6,7 @@ set -e
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 GODOT_PATH="/Users/iwasakishungo/Downloads/Godot.app/Contents/MacOS/Godot"
-XCODE_PROJECT="$PROJECT_ROOT/SupportRateGame/builds/ios/SupportRateGame.xcodeproj"
+XCODE_PROJECT="$PROJECT_ROOT/DefuseForge/builds/ios/DefuseForge.xcodeproj"
 PBXPROJ="$XCODE_PROJECT/project.pbxproj"
 TEAM_ID="NSB57DVW9V"
 DEVICE_ID="00008101-000958903C46001E"
@@ -18,7 +18,7 @@ echo "=== iOS実機ビルドスクリプト ==="
 # Godotエクスポートオプション
 if [[ "$1" == "--export" ]]; then
     echo "1. Godotプロジェクトをエクスポート中..."
-    "$GODOT_PATH" --headless --path "$PROJECT_ROOT/SupportRateGame" --export-debug "iOS" "builds/ios/SupportRateGame.xcodeproj"
+    "$GODOT_PATH" --headless --path "$PROJECT_ROOT/DefuseForge" --export-debug "iOS" "builds/ios/DefuseForge.xcodeproj"
     echo "   エクスポート完了"
 fi
 
@@ -53,7 +53,7 @@ fi
 echo "4. クリーンビルドを実行中..."
 xcodebuild \
     -project "$XCODE_PROJECT" \
-    -scheme "SupportRateGame" \
+    -scheme "DefuseForge" \
     -configuration Debug \
     -destination "id=$DEVICE_ID" \
     clean >/dev/null 2>&1 || true
@@ -70,13 +70,13 @@ fi
 echo "6. Xcodeビルド中..."
 xcodebuild \
     -project "$XCODE_PROJECT" \
-    -scheme "SupportRateGame" \
+    -scheme "DefuseForge" \
     -configuration Debug \
     -destination "id=$DEVICE_ID" \
     -allowProvisioningUpdates \
     build 2>&1 | xcbeautify 2>/dev/null || xcodebuild \
     -project "$XCODE_PROJECT" \
-    -scheme "SupportRateGame" \
+    -scheme "DefuseForge" \
     -configuration Debug \
     -destination "id=$DEVICE_ID" \
     -allowProvisioningUpdates \
@@ -84,8 +84,8 @@ xcodebuild \
 
 echo "7. 実機にインストール中..."
 # ビルド成果物のパスを取得
-BUILD_DIR=$(xcodebuild -project "$XCODE_PROJECT" -scheme "SupportRateGame" -showBuildSettings 2>/dev/null | grep " BUILT_PRODUCTS_DIR" | head -1 | awk '{print $3}')
-APP_PATH="$BUILD_DIR/SupportRateGame.app"
+BUILD_DIR=$(xcodebuild -project "$XCODE_PROJECT" -scheme "DefuseForge" -showBuildSettings 2>/dev/null | grep " BUILT_PRODUCTS_DIR" | head -1 | awk '{print $3}')
+APP_PATH="$BUILD_DIR/DefuseForge.app"
 
 if [ -d "$APP_PATH" ]; then
     xcrun devicectl device install app --device "$DEVICE_ID" "$APP_PATH" 2>/dev/null || \

@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="Tactical Strike"
+config/name="DefuseForge"
 config/description="CS1.6 meets Door Kickers 2 - トップダウンタクティカルシューター"
 run/main_scene="res://scenes/title.tscn"
 config/features=PackedStringArray("4.5", "Mobile")

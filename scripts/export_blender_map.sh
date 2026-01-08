@@ -7,7 +7,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
-PROJECT_DIR="$ROOT_DIR/SupportRateGame"
+PROJECT_DIR="$ROOT_DIR/DefuseForge"
 OUTPUT_DIR="$PROJECT_DIR/resources/maps"
 
 # Blenderパス

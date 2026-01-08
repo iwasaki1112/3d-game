@@ -2,7 +2,7 @@
 
 ## プロジェクト情報
 - **エンジン**: Godot 4.5.1
-- **プロジェクトパス**: `SupportRateGame/`
+- **プロジェクトパス**: `DefuseForge/`
 - **言語**: GDScript
 
 ## スキル
@@ -41,10 +41,10 @@
 ## よく使うコマンド
 ```bash
 # Godotエディタを開く
-"/Users/iwasakishungo/Downloads/Godot.app/Contents/MacOS/Godot" --path SupportRateGame --editor
+"/Users/iwasakishungo/Downloads/Godot.app/Contents/MacOS/Godot" --path DefuseForge --editor
 
 # プロジェクトを実行
-"/Users/iwasakishungo/Downloads/Godot.app/Contents/MacOS/Godot" --path SupportRateGame
+"/Users/iwasakishungo/Downloads/Godot.app/Contents/MacOS/Godot" --path DefuseForge
 ```
 
 ## iOS実機ビルド
