@@ -76,6 +76,7 @@ var _left_hand_grip_source: Node3D = null
 var _left_hand_ik_offset: Vector3 = Vector3.ZERO
 var _left_hand_ik_rotation: Vector3 = Vector3.ZERO
 var _weapon_resource: Resource = null  # WeaponResource
+var _ik_interpolation_tween: Tween = null  # IK補間用Tween
 
 # キャラクターリソース（武器オフセット等）
 var _character_resource: Resource = null  # CharacterResource
@@ -783,6 +784,9 @@ func _setup_left_hand_ik() -> void:
 ## 左手IKの有効/無効を更新
 ## 特定のアニメーション（リロード等）ではIKを無効にする
 ## パターンマッチングで自動判定し、設定の分散を防ぐ
+## IK再有効化時はTweenで補間してスムーズな遷移を実現
+const IK_BLEND_DURATION: float = 0.25  # IK補間時間（秒）
+
 func _update_left_hand_ik_enabled(anim_name: String) -> void:
 	if not left_hand_ik:
 		return
@@ -790,13 +794,37 @@ func _update_left_hand_ik_enabled(anim_name: String) -> void:
 	var should_disable := _should_disable_ik_for_animation(anim_name)
 
 	if should_disable:
+		# IKを無効化（即座に）
+		_cancel_ik_tween()
 		if left_hand_ik.is_running():
+			left_hand_ik.interpolation = 0.0
 			left_hand_ik.stop()
 			print("[CharacterBase] Left hand IK disabled for: %s" % anim_name)
 	else:
+		# IKを有効化（スムーズに補間）
 		if not left_hand_ik.is_running():
+			left_hand_ik.interpolation = 0.0
 			left_hand_ik.start()
-			print("[CharacterBase] Left hand IK enabled for: %s" % anim_name)
+			_blend_ik_interpolation(1.0, IK_BLEND_DURATION)
+			print("[CharacterBase] Left hand IK enabled (blending) for: %s" % anim_name)
+
+
+## IK補間Tweenをキャンセル
+func _cancel_ik_tween() -> void:
+	if _ik_interpolation_tween and _ik_interpolation_tween.is_valid():
+		_ik_interpolation_tween.kill()
+		_ik_interpolation_tween = null
+
+
+## IK interpolationをスムーズに変更
+func _blend_ik_interpolation(target_value: float, duration: float) -> void:
+	_cancel_ik_tween()
+	if not left_hand_ik:
+		return
+
+	_ik_interpolation_tween = create_tween()
+	_ik_interpolation_tween.tween_property(left_hand_ik, "interpolation", target_value, duration) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 
 
 ## アニメーション名からIKを無効にすべきか判定

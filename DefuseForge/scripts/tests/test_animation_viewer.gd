@@ -1154,6 +1154,9 @@ func _play_animation(anim_name: String) -> void:
 		push_warning("[BotViewer] Animation not found: ", anim_name)
 
 
+const IK_BLEND_DURATION: float = 0.25  # IK補間時間（秒）
+var _ik_interpolation_tween: Tween = null  # IK補間用Tween
+
 func _update_left_hand_ik_enabled(anim_name: String) -> void:
 	if not left_hand_ik:
 		return
@@ -1161,13 +1164,37 @@ func _update_left_hand_ik_enabled(anim_name: String) -> void:
 	var should_disable := _should_disable_ik_for_animation(anim_name)
 
 	if should_disable:
+		# IKを無効化（即座に）
+		_cancel_ik_tween()
 		if left_hand_ik.is_running():
+			left_hand_ik.interpolation = 0.0
 			left_hand_ik.stop()
 			print("[BotViewer] Left hand IK disabled for: %s" % anim_name)
 	else:
+		# IKを有効化（スムーズに補間）
 		if not left_hand_ik.is_running():
+			left_hand_ik.interpolation = 0.0
 			left_hand_ik.start()
-			print("[BotViewer] Left hand IK enabled for: %s" % anim_name)
+			_blend_ik_interpolation(1.0, IK_BLEND_DURATION)
+			print("[BotViewer] Left hand IK enabled (blending) for: %s" % anim_name)
+
+
+## IK補間Tweenをキャンセル
+func _cancel_ik_tween() -> void:
+	if _ik_interpolation_tween and _ik_interpolation_tween.is_valid():
+		_ik_interpolation_tween.kill()
+		_ik_interpolation_tween = null
+
+
+## IK interpolationをスムーズに変更
+func _blend_ik_interpolation(target_value: float, duration: float) -> void:
+	_cancel_ik_tween()
+	if not left_hand_ik:
+		return
+
+	_ik_interpolation_tween = create_tween()
+	_ik_interpolation_tween.tween_property(left_hand_ik, "interpolation", target_value, duration) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 
 
 ## アニメーション名からIKを無効にすべきか判定

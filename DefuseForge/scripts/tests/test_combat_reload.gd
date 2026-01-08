@@ -30,8 +30,10 @@ func _ready() -> void:
 	if enemy_combat:
 		enemy_combat.auto_attack = false  # リロード確認のため敵は攻撃しない
 
-	# 敵のHPを高くしてリロードを確認できるようにする
-	enemy.health = 10000.0
+	# 敵のHPを1回リロード後に死亡する程度に設定
+	# マガジン5発 × 2回 = 10発、AK47ダメージ36、命中率85%
+	# 期待ダメージ: 10 × 36 × 0.85 ≈ 306
+	enemy.health = 250.0
 
 	# 死亡シグナルを接続
 	if player.has_signal("died"):
