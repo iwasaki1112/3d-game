@@ -126,11 +126,6 @@ func _is_mouse_over_ui() -> bool:
 	if not viewport:
 		return false
 
-	# フォーカスを持つGUIコントロールがあればUI操作中
-	var gui_control := viewport.gui_get_focus_owner()
-	if gui_control:
-		return true
-
 	# マウス位置がCanvasLayer内のコントロール上にあるかチェック
 	var mouse_pos := viewport.get_mouse_position()
 	var root := get_tree().current_scene
