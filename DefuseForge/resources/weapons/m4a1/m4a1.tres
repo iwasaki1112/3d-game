@@ -20,6 +20,9 @@ effective_range = 22.0
 headshot_multiplier = 4.0
 bodyshot_multiplier = 1.0
 
+magazine_size = 30
+reload_time = 2.5
+
 scene_path = "res://scenes/weapons/m4a1.tscn"
 
 attach_position = Vector3(0, 0, 0)

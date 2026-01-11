@@ -31,7 +31,7 @@ var character: CharacterBody3D = null
 # 現在のターゲット
 var current_target: Node3D = null
 
-# 武器データ（CharacterSetupから取得）
+# 武器データ（WeaponResourceから取得）
 var weapon_data: Dictionary = {}
 
 # 発砲クールダウン
@@ -246,23 +246,31 @@ func _has_line_of_sight(target: Node3D) -> bool:
 
 ## 武器データを更新
 func _update_weapon_data() -> void:
-	if character and character.has_method("get_current_weapon_id"):
-		var weapon_id = character.get_current_weapon_id()
-		weapon_data = CharacterSetup.get_weapon_data(weapon_id)
+	if character and character.has_method("get_weapon_resource"):
+		var resource = character.get_weapon_resource()
+		if resource:
+			weapon_data = resource.to_dict()
+		else:
+			weapon_data = {}
 	else:
-		weapon_data = CharacterSetup.get_weapon_data(CharacterSetup.WeaponId.NONE)
+		weapon_data = {}
 
 	# 弾数を初期化
-	max_ammo = weapon_data.get("magazine_size", 0)
+	max_ammo = weapon_data.get("magazine_size", 30)
 	current_ammo = max_ammo
 	ammo_changed.emit(current_ammo, max_ammo)
 
 
 ## 武器変更時に呼び出す
 func on_weapon_changed(weapon_id: int) -> void:
-	weapon_data = CharacterSetup.get_weapon_data(weapon_id)
+	# WeaponRegistryから直接取得
+	var resource = WeaponRegistry.get_weapon(weapon_id)
+	if resource:
+		weapon_data = resource.to_dict()
+	else:
+		weapon_data = {}
 	# 弾数を初期化
-	max_ammo = weapon_data.get("magazine_size", 0)
+	max_ammo = weapon_data.get("magazine_size", 30)
 	current_ammo = max_ammo
 	_is_reloading = false
 	ammo_changed.emit(current_ammo, max_ammo)

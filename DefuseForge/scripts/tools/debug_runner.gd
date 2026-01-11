@@ -4,8 +4,8 @@ func _init():
 	print("\n=== Scene Structure Comparison ===\n")
 
 	var scenes = {
-		"FBX": "res://assets/characters/mixamo_test/mixamo_test.fbx",
-		"GLB": "res://assets/characters/vanguard/vanguard.glb"
+		"AnimLib": "res://assets/animations/actorstore_animation_library.glb",
+		"Character": "res://assets/characters/vanguard/vanguard.glb"
 	}
 
 	for label in scenes:

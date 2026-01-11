@@ -1,7 +1,7 @@
 extends SceneTree
 
 func _init():
-	var path = "res://assets/animations/mixamo_animation_library.glb"
+	var path = "res://assets/animations/actorstore_animation_library.glb"
 	print("Checking: %s" % path)
 	var scene = load(path)
 	if scene:

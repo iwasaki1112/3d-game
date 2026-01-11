@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/characters/character_base.gd" id="1_character_base"]
 [ext_resource type="Script" path="res://scripts/characters/components/combat_component.gd" id="2_combat_component"]
-[ext_resource type="PackedScene" path="res://assets/characters/vanguard/vanguard.glb" id="3_character_model"]
+[ext_resource type="PackedScene" uid="uid://cnita1khplv4c" path="res://assets/characters/shade/shade.glb" id="3_character_model"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 radius = 0.3

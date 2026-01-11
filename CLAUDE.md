@@ -12,6 +12,7 @@
 |--------|------|
 | `/add-weapon` | 武器追加ガイド（Blenderモデル準備→WeaponResource作成→左手IK調整） |
 | `/export-character` | BlenderからキャラクターをGLBエクスポート（NLAアニメーション含む）→Godotに配置 |
+| `/organize-arp-collection` | ARPでRig&Bind後のコレクション構造を整理。character1→キャラクター名にリネーム、csコレクションを非表示に設定。 |
 | `/retarget-animation` | MixamoアニメーションをAuto-Rig Proでリターゲット→NLAトラックにPush Down |
 | `/sakurai-review` | 桜井政博氏の哲学に基づくゲーム設計レビュー（リスク/リターン、難易度曲線等） |
 | `/difficulty-design` | 難易度設計支援（デコボコ曲線、3分間の法則、救済システム） |
@@ -74,10 +75,10 @@ player.set_weapon(CharacterSetup.WeaponId.AK47)
 ## よく使うコマンド
 ```bash
 # Godotエディタを開く
-"/Users/iwasakishungo/Downloads/Godot.app/Contents/MacOS/Godot" --path DefuseForge --editor
+"/Applications/Godot.app/Contents/MacOS/Godot" --path DefuseForge --editor
 
 # プロジェクトを実行
-"/Users/iwasakishungo/Downloads/Godot.app/Contents/MacOS/Godot" --path DefuseForge
+"/Applications/Godot.app/Contents/MacOS/Godot" --path DefuseForge
 ```
 
 ## iOS実機ビルド

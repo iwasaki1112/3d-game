@@ -4,9 +4,9 @@ extends EditorScript
 func _run() -> void:
 	print("\n=== Scene Tree Debug ===\n")
 
-	# Compare FBX and GLB structures
+	# Compare ARP character and animation library structures
 	var scenes = [
-		"res://assets/characters/mixamo_test/mixamo_test.fbx",
+		"res://assets/animations/actorstore_animation_library.glb",
 		"res://assets/characters/vanguard/vanguard.glb"
 	]
 

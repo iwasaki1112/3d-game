@@ -29,6 +29,10 @@ extends Resource
 @export var headshot_multiplier: float = 4.0  ## ヘッドショット倍率
 @export var bodyshot_multiplier: float = 1.0  ## ボディショット倍率
 
+@export_group("弾薬")
+@export var magazine_size: int = 30  ## マガジン容量
+@export var reload_time: float = 2.5  ## リロード時間（秒）
+
 @export_group("リソース")
 @export var scene_path: String = ""  ## 武器シーンパス（例: "res://scenes/weapons/ak47.tscn"）
 
@@ -104,6 +108,8 @@ func to_dict() -> Dictionary:
 		"range": effective_range,
 		"headshot_multiplier": headshot_multiplier,
 		"bodyshot_multiplier": bodyshot_multiplier,
+		"magazine_size": magazine_size,
+		"reload_time": reload_time,
 		"scene_path": scene_path,
 		"kill_reward": kill_reward,
 		"attach_position": attach_position,
@@ -128,6 +134,8 @@ static func from_dict(data: Dictionary, id: String = "") -> WeaponResource:
 	res.effective_range = data.get("range", 0.0)
 	res.headshot_multiplier = data.get("headshot_multiplier", 4.0)
 	res.bodyshot_multiplier = data.get("bodyshot_multiplier", 1.0)
+	res.magazine_size = data.get("magazine_size", 30)
+	res.reload_time = data.get("reload_time", 2.5)
 	res.scene_path = data.get("scene_path", "")
 	res.kill_reward = data.get("kill_reward", 300)
 	res.attach_position = data.get("attach_position", Vector3.ZERO)
