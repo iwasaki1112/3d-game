@@ -4,6 +4,11 @@
 - **エンジン**: Godot 4.5.1
 - **プロジェクトパス**: `DefuseForge/`
 - **言語**: GDScript
+- **メインシーン**: `scenes/tests/test_animation_viewer.tscn`
+
+## 現在の状態
+プロジェクトは開発途中で、現在は **test_animation_viewer** のみが稼働しています。
+ゲーム本体のシーン（title, game, lobby等）は削除済みです。
 
 ## スキル
 
@@ -25,48 +30,49 @@
 | `/claude-mem:mem-search` | 過去セッションのメモリ検索（「前回どうやった？」等） |
 | `/claude-mem:troubleshoot` | claude-memのインストール問題診断・修正 |
 
-## ドキュメント参照
-詳細な仕様は以下のドキュメントを参照すること：
+## プロジェクト構造
 
-| ドキュメント | 内容 |
-|------------|------|
-| `docs/GAME_DESIGN.md` | ゲーム設計・仕様 |
-| `docs/CHARACTER_API.md` | キャラクターAPI（生成・操作） |
-| `docs/WEAPON_API.md` | 武器システムAPI |
-| `docs/BLENDER_ANIMATION.md` | Blenderアニメーション設定 |
-
-## キャラクター追加（クイックリファレンス）
-
-### コードで生成
-```gdscript
-# プレイヤー生成（AK-47装備）
-var player = CharacterAPI.create("player", CharacterSetup.WeaponId.AK47)
-CharacterAPI.spawn(player, self, Vector3(0, 0, 0))
-
-# 敵生成
-var enemy = CharacterAPI.create("enemies", CharacterSetup.WeaponId.GLOCK)
-CharacterAPI.spawn(enemy, self, Vector3(0, 0, -5), PI)
+### シーン
+```
+scenes/
+├── tests/test_animation_viewer.tscn  # メインシーン（アニメーション確認用）
+├── weapons/
+│   ├── ak47.tscn
+│   └── m4a1.tscn
+└── effects/muzzle_flash.tscn
 ```
 
-### プリセットシーン使用
-```gdscript
-var player = preload("res://scenes/characters/player_base.tscn").instantiate()
-add_child(player)
-player.set_weapon(CharacterSetup.WeaponId.AK47)
+### スクリプト
+```
+scripts/
+├── api/character_api.gd              # キャラクター操作API
+├── characters/
+│   ├── character_base.gd             # キャラクター基底クラス
+│   └── components/
+│       ├── animation_component.gd
+│       ├── health_component.gd
+│       ├── movement_component.gd
+│       └── weapon_component.gd
+├── registries/
+│   ├── character_registry.gd
+│   └── weapon_registry.gd
+├── resources/
+│   ├── action_state.gd
+│   ├── character_resource.gd
+│   └── weapon_resource.gd
+├── tests/
+│   ├── test_animation_viewer.gd
+│   └── orbit_camera.gd
+├── effects/muzzle_flash.gd
+└── utils/two_bone_ik_3d.gd           # 左手IK
 ```
 
-### 利用可能なプリセット
-| シーン | 用途 |
-|--------|------|
-| `scenes/characters/player_base.tscn` | プレイヤーキャラクター |
-| `scenes/characters/enemy_base.tscn` | 敵キャラクター |
-
-### 自動セットアップ内容
-- CharacterBase（移動、アニメーション、HP管理）
-- CombatComponent（自動攻撃、弾数管理、リロード）
-- AnimationTree（上半身/下半身ブレンド）
-- 武器装着（右手ボーン）
-- 死亡アニメーション
+## キャラクターアセット
+```
+assets/characters/
+├── shade/shade.glb     # メインキャラクター
+└── phantom/phantom.glb # shadeとアニメーション共有
+```
 
 ## Tool Priority
 1. **Godot MCP** (優先) - シーン作成・編集・プロジェクト実行
@@ -80,13 +86,6 @@ player.set_weapon(CharacterSetup.WeaponId.AK47)
 # プロジェクトを実行
 "/Applications/Godot.app/Contents/MacOS/Godot" --path DefuseForge
 ```
-
-## iOS実機ビルド
-**必ず専用スクリプトを使用すること！**
-```bash
-./scripts/ios_build.sh --export
-```
-※ `--export`オプション必須。Godotの`--export-debug`を直接実行しないこと。
 
 ## Error handling
 - シーンが読み込めない → UIDを確認
