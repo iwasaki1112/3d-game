@@ -2,6 +2,8 @@ extends Node3D
 ## Animation viewer - simple animation testing for character models
 ## Uses the new simplified CharacterBase API
 
+const CharacterAPIScript = preload("res://scripts/api/character_api.gd")
+
 @onready var camera: Camera3D = $OrbitCamera
 @onready var character_body: CharacterBase = $CharacterBody
 @onready var canvas_layer: CanvasLayer = $CanvasLayer
@@ -22,10 +24,7 @@ const CHARACTERS_DIR: String = "res://assets/characters/"
 var available_characters: Array[String] = []
 var current_character_id: String = "shade"
 
-# Animation sharing - characters without animations use another character's animations
-const ANIMATION_SOURCE: Dictionary = {
-	"phantom": "shade"  # phantom uses shade's animations (same ARP rig)
-}
+# Animation sharing is now handled by CharacterAPIScript.ANIMATION_SOURCE
 var character_model: Node3D = null
 var character_option_button: OptionButton = null
 
@@ -517,143 +516,11 @@ func _populate_bottom_panel() -> void:
 	hand_z_section.add_child(hand_z_slider)
 
 
-## 表示するアニメーション名（完全一致、優先順）
-const PREFERRED_ANIMATIONS: Array[String] = [
-	"idle",
-	"walk",  # Simple name from NLA track
-	"run",   # Simple name from NLA track
-	"e01-walk-f-loop_remap",  # Legacy walk
-	"c12-run-f-loop_remap",   # Legacy run/sprint
-]
-
-## フォールバック用キーワード
-const FALLBACK_KEYWORDS: Dictionary = {
-	"idle": ["idle"],
-	"walk": ["walk"],
-	"run": ["run", "sprint"],
-}
-
-## Allow non-_remap animations too
-const ALLOW_SIMPLE_NAMES: bool = true
-
-
+## Collect animations using CharacterAPI
 func _collect_animations() -> void:
 	_animations.clear()
-
-	# Get all animations from AnimationPlayer
-	var all_anims: PackedStringArray = PackedStringArray()
-	if character_body.animation and character_body.animation.has_method("get_animation_list"):
-		all_anims = character_body.animation.get_animation_list()
-		print("[AnimViewer] Got %d animations from animation component" % all_anims.size())
-	elif character_body.model:
-		var anim_player = _find_animation_player(character_body.model)
-		if anim_player:
-			all_anims = anim_player.get_animation_list()
-			print("[AnimViewer] Got %d animations from AnimationPlayer" % all_anims.size())
-
-	print("[AnimViewer] All animations: %s" % str(all_anims))
-
-	# First try preferred animations (exact match)
-	for pref_anim in PREFERRED_ANIMATIONS:
-		for anim_name in all_anims:
-			if anim_name == pref_anim:
-				_animations.append(anim_name)
-				break
-
-	# If no preferred found, use fallback keywords
-	if _animations.is_empty():
-		for category in FALLBACK_KEYWORDS:
-			var keywords: Array = FALLBACK_KEYWORDS[category]
-			for anim_name in all_anims:
-				if anim_name == "RESET":
-					continue
-				var anim_lower = anim_name.to_lower()
-				var found = false
-				for keyword in keywords:
-					# Match with _remap suffix or simple names
-					if keyword in anim_lower:
-						if "_remap" in anim_lower or ALLOW_SIMPLE_NAMES:
-							_animations.append(anim_name)
-							found = true
-							break
-				if found:
-					break
-
-
-func _find_animation_player(node: Node) -> AnimationPlayer:
-	for child in node.get_children():
-		if child is AnimationPlayer:
-			return child
-		var found = _find_animation_player(child)
-		if found:
-			return found
-	return null
-
-
-## Copy animations from source character (for characters sharing the same ARP rig)
-func _copy_animations_from_source(source_character_id: String) -> void:
-	print("[AnimViewer] Copying animations from: %s" % source_character_id)
-
-	# Load source character GLB
-	var glb_path = CHARACTERS_DIR + source_character_id + "/" + source_character_id + ".glb"
-	var fbx_path = CHARACTERS_DIR + source_character_id + "/" + source_character_id + ".fbx"
-	var source_path = glb_path if ResourceLoader.exists(glb_path) else fbx_path
-
-	if not ResourceLoader.exists(source_path):
-		push_warning("[AnimViewer] Source character not found: %s" % source_path)
-		return
-
-	var source_scene = load(source_path)
-	if not source_scene:
-		push_warning("[AnimViewer] Failed to load source character: %s" % source_path)
-		return
-
-	var source_instance = source_scene.instantiate()
-	var source_anim_player = _find_animation_player(source_instance)
-
-	if not source_anim_player:
-		push_warning("[AnimViewer] No AnimationPlayer found in source character")
-		source_instance.queue_free()
-		return
-
-	# Get target AnimationPlayer
-	var target_anim_player = _find_animation_player(character_model)
-	if not target_anim_player:
-		# Create AnimationPlayer if not exists
-		target_anim_player = AnimationPlayer.new()
-		target_anim_player.name = "AnimationPlayer"
-		character_model.add_child(target_anim_player)
-
-	# Copy animations from source to target
-	var anim_list = source_anim_player.get_animation_list()
-	print("[AnimViewer] Found %d animations in source" % anim_list.size())
-
-	for anim_name in anim_list:
-		if anim_name == "RESET":
-			continue
-		var anim = source_anim_player.get_animation(anim_name)
-		if anim:
-			# Create a duplicate of the animation
-			var anim_copy = anim.duplicate()
-
-			# Check if animation library exists
-			var lib_name = ""  # Default library
-			if not target_anim_player.has_animation_library(lib_name):
-				target_anim_player.add_animation_library(lib_name, AnimationLibrary.new())
-
-			var lib = target_anim_player.get_animation_library(lib_name)
-			if lib.has_animation(anim_name):
-				lib.remove_animation(anim_name)
-			lib.add_animation(anim_name, anim_copy)
-
-	print("[AnimViewer] Copied %d animations" % (anim_list.size() - 1))  # -1 for RESET
-
-	# Clean up source instance
-	source_instance.queue_free()
-
-	# Re-setup animation component with new animations
-	if character_body.animation:
-		character_body.animation.setup(character_model, character_body.skeleton)
+	_animations = CharacterAPIScript.get_available_animations(character_body, true)
+	print("[AnimViewer] Collected %d animations via CharacterAPI" % _animations.size())
 
 
 func _physics_process(delta: float) -> void:
@@ -750,7 +617,7 @@ func _change_character(character_id: String) -> void:
 	# Update current character ID
 	current_character_id = character_id
 
-	# Load new character
+	# Load new character model
 	var glb_path = CHARACTERS_DIR + character_id + "/" + character_id + ".glb"
 	var fbx_path = CHARACTERS_DIR + character_id + "/" + character_id + ".fbx"
 	var character_path = glb_path if ResourceLoader.exists(glb_path) else fbx_path
@@ -771,14 +638,11 @@ func _change_character(character_id: String) -> void:
 	# Equip weapon
 	character_body.set_weapon(_weapon_id_string_to_int(current_weapon_id))
 
+	# Setup animations using CharacterAPI (handles animation sharing automatically)
+	CharacterAPIScript.setup_animations(character_body, character_id)
+
 	# Collect animations
 	_collect_animations()
-
-	# If no animations found and character has animation source mapping, copy from source
-	if _animations.is_empty() and ANIMATION_SOURCE.has(character_id):
-		var source_id = ANIMATION_SOURCE[character_id]
-		_copy_animations_from_source(source_id)
-		_collect_animations()  # Re-collect after copying
 
 	# Refresh UI
 	_populate_ui()

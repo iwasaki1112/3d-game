@@ -16,6 +16,7 @@ var ai_state: AIState = AIState.IDLE
 @export_group("AI設定")
 @export var detection_range: float = 15.0
 @export var attack_range: float = 10.0
+@export var rotation_speed: float = 5.0
 @export var patrol_points: Array[Vector3] = []
 
 # ターゲット

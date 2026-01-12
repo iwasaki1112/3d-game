@@ -14,6 +14,7 @@ const FogOfWarManagerScript = preload("res://scripts/systems/vision/fog_of_war_m
 const FogOfWarRendererScript = preload("res://scripts/systems/vision/fog_of_war_renderer.gd")
 const NetworkSyncManagerScript = preload("res://scripts/systems/network_sync_manager.gd")
 const GridManagerScript = preload("res://scripts/systems/grid/grid_manager.gd")
+const CharacterAPIScript = preload("res://scripts/api/character_api.gd")
 
 @onready var ct_node: Node3D = $CT
 @onready var t_node: Node3D = $T
@@ -56,38 +57,18 @@ func _ready() -> void:
 	_setup_fog_of_war_manager()
 	_setup_match_manager()
 
-	# オンラインマッチの場合、割り当てられたチームに基づいて初期化
-	var my_team_node: Node3D = ct_node
-	var enemy_team_node: Node3D = t_node
-
-	if GameManager.is_online_match:
-		# 割り当てられたチームに応じてノードを入れ替え
-		if GameManager.assigned_team == GameManager.Team.TERRORIST:
-			my_team_node = t_node
-			enemy_team_node = ct_node
-	# 自分のチームを収集してSquadManagerに登録
+	# CharacterAPIを使用してキャラクターを生成
 	var my_team_members: Array[CharacterBody3D] = []
-	for child in my_team_node.get_children():
-		if child is CharacterBody3D:
-			my_team_members.append(child)
-			# オンラインマッチで自分のチームを操作する場合、AIを無効化
-			if GameManager.is_online_match:
-				if "is_player_controlled" in child:
-					child.is_player_controlled = true
+	var enemy_members: Array[CharacterBody3D] = []
+	_spawn_team_characters(my_team_members, enemy_members)
+
+	# enemiesに格納
+	enemies = enemy_members
 
 	# SquadManagerで分隊を初期化
 	if squad_manager:
 		squad_manager.initialize_squad(my_team_members)
 		squad_manager.player_selected.connect(_on_squad_player_selected)
-
-	# 敵チームを収集（enemyスクリプトでグループに自動追加される）
-	for child in enemy_team_node.get_children():
-		if child is CharacterBody3D:
-			enemies.append(child)
-			# オンラインマッチでは敵チームのAIも無効化（相手プレイヤーが操作する）
-			if GameManager.is_online_match:
-				if "is_player_controlled" in child:
-					child.is_player_controlled = true
 
 	# マップのスポーンポイントからキャラクターの位置を設定
 	_apply_spawn_positions_from_map(my_team_members, enemies)
@@ -113,6 +94,53 @@ func _ready() -> void:
 
 	# ゲームを開始（すべてのノードがreadyになった後に実行）
 	GameManager.start_game.call_deferred()
+
+
+## CharacterAPIを使用してチームキャラクターを生成
+## @param my_team_out: 自分のチームキャラクター配列（出力）
+## @param enemy_out: 敵チームキャラクター配列（出力）
+func _spawn_team_characters(my_team_out: Array[CharacterBody3D], enemy_out: Array[CharacterBody3D]) -> void:
+	const TEAM_SIZE: int = 3
+
+	# オンラインマッチの場合、割り当てられたチームに基づいて初期化
+	var my_team_node: Node3D = ct_node
+	var enemy_team_node: Node3D = t_node
+	var my_preset = CharacterAPIScript.Preset.PLAYER
+	var enemy_preset = CharacterAPIScript.Preset.ENEMY
+
+	if GameManager.is_online_match:
+		# 割り当てられたチームに応じてノードを入れ替え
+		if GameManager.assigned_team == GameManager.Team.TERRORIST:
+			my_team_node = t_node
+			enemy_team_node = ct_node
+			my_preset = CharacterAPIScript.Preset.ENEMY
+			enemy_preset = CharacterAPIScript.Preset.PLAYER
+
+	# 自分のチームを生成
+	for i in range(TEAM_SIZE):
+		var character = CharacterAPIScript.create_from_preset(my_preset, WeaponRegistry.WeaponId.AK47)
+		if character:
+			character.name = "Player%d" % (i + 1)
+			CharacterAPIScript.spawn(character, my_team_node, Vector3.ZERO)
+			my_team_out.append(character)
+			# オンラインマッチで自分のチームを操作する場合、AIを無効化
+			if GameManager.is_online_match:
+				if "is_player_controlled" in character:
+					character.is_player_controlled = true
+
+	# 敵チームを生成
+	for i in range(TEAM_SIZE):
+		var character = CharacterAPIScript.create_from_preset(enemy_preset, WeaponRegistry.WeaponId.AK47)
+		if character:
+			character.name = "Enemy%d" % (i + 1)
+			CharacterAPIScript.spawn(character, enemy_team_node, Vector3.ZERO)
+			enemy_out.append(character)
+			# オンラインマッチでは敵チームのAIも無効化（相手プレイヤーが操作する）
+			if GameManager.is_online_match:
+				if "is_player_controlled" in character:
+					character.is_player_controlled = true
+
+	print("[GameScene] Spawned %d allies and %d enemies via CharacterAPI" % [my_team_out.size(), enemy_out.size()])
 
 
 ## SquadManagerからプレイヤー選択変更通知

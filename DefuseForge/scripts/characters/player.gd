@@ -12,6 +12,9 @@ var team: GameManager.Team = GameManager.Team.CT
 # PlayerDataへの参照
 var player_data: RefCounted = null
 
+# アーマー（プレイヤー固有）
+var armor: float = 0.0
+
 
 func _ready() -> void:
 	super._ready()
@@ -56,32 +59,33 @@ func take_damage(amount: float, attacker: Node3D = null, is_headshot: bool = fal
 	super.take_damage(amount, attacker, is_headshot)
 	# PlayerDataの値を同期
 	if player_data:
-		player_data.health = health
-		player_data.armor = armor
+		player_data.health = get_health()
 
 
 ## 回復（PlayerDataと同期）
 func heal(amount: float) -> void:
 	super.heal(amount)
 	if player_data:
-		player_data.health = health
+		player_data.health = get_health()
 
 
 ## アーマー追加（PlayerDataと同期）
 func add_armor(amount: float) -> void:
-	super.add_armor(amount)
+	armor = min(armor + amount, 100.0)
 	if player_data:
 		player_data.armor = armor
 
 
 ## ステータスをリセット（ラウンド開始時）
 func reset_stats() -> void:
-	health = 100.0
+	# HealthComponentをリセット
+	if health:
+		health.health = health.max_health
 	armor = 0.0
 	is_alive = true
 	visible = true
 	if player_data:
-		player_data.health = health
+		player_data.health = get_health()
 		player_data.armor = armor
 		player_data.is_alive = true
 
