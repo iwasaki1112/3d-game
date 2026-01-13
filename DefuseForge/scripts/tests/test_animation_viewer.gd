@@ -583,54 +583,10 @@ func _physics_process(delta: float) -> void:
 		character_body.move_and_slide()
 
 
-var _test_arm_rotation: float = 0.0
-var _test_arm_enabled: bool = false
-
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_SPACE:
 			_shoot()
-		elif event.keycode == KEY_T:
-			upper_body_rotation = 30.0 if upper_body_rotation < 1.0 else 0.0
-			character_body.set_upper_body_rotation(upper_body_rotation)
-		elif event.keycode == KEY_I:
-			# Toggle continuous arm rotation test + STOP animation
-			_test_arm_enabled = not _test_arm_enabled
-			_test_arm_rotation = 90.0
-			# Stop all animation
-			if _test_arm_enabled and character_body.animation:
-				var anim_player = character_body.model.get_node_or_null("AnimationPlayer")
-				var anim_tree = character_body.model.get_node_or_null("AnimationTree")
-				if anim_tree:
-					anim_tree.active = false
-					print("[TEST] AnimationTree disabled")
-				if anim_player:
-					anim_player.stop()
-					print("[TEST] AnimationPlayer stopped")
-			print("[TEST] Arm rotation test: %s (rotation=%.0f)" % ["ENABLED" if _test_arm_enabled else "DISABLED", _test_arm_rotation])
-		elif event.keycode == KEY_O:
-			# Increase rotation
-			_test_arm_rotation += 30.0
-			print("[TEST] Arm rotation set to %.0f degrees" % _test_arm_rotation)
-
-
-func _process(_delta: float) -> void:
-	# Apply arm rotation EVERY FRAME to override animation
-	if _test_arm_enabled:
-		_rotate_arm_directly(_test_arm_rotation)
-
-
-func _rotate_arm_directly(degrees: float) -> void:
-	if character_body.skeleton == null:
-		return
-
-	var bone_idx = character_body.skeleton.find_bone("arm.l")
-	if bone_idx < 0:
-		return
-
-	# Apply rotation every frame
-	var new_rotation = Quaternion.from_euler(Vector3(deg_to_rad(degrees), 0, 0))
-	character_body.skeleton.set_bone_pose_rotation(bone_idx, new_rotation)
 
 
 func _on_character_selected(index: int) -> void:
@@ -737,7 +693,7 @@ func _change_weapon(weapon_id: String) -> void:
 
 
 func _play_animation(anim_name: String) -> void:
-	character_body.play_animation(anim_name, blend_time)
+	CharacterAPIScript.play_animation(character_body, anim_name, blend_time)
 	print("[AnimViewer] Playing: %s" % anim_name)
 
 

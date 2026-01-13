@@ -221,7 +221,7 @@ func _setup_left_hand_ik() -> void:
 		push_warning("[WeaponComponent] Invalid bone chain: middle parent=%d, root=%d" % [middle_parent, root_idx])
 		return
 
-	var middle_bone_name := skeleton.get_bone_name(middle_idx)
+	var _middle_bone_name := skeleton.get_bone_name(middle_idx)
 
 	# TwoBoneIK3Dノードを作成（SkeletonModifier3Dベース）
 	left_hand_ik = TwoBoneIK3D.new()
