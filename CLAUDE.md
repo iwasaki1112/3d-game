@@ -70,14 +70,14 @@ scripts/
 ## キャラクターアセット
 ```
 assets/characters/
-├── shade/shade.glb     # メインキャラクター（アニメーション元）
-├── phantom/phantom.glb # shadeとアニメーション共有
-└── vanguard/vanguard.glb # shadeとアニメーション共有
+├── shade/shade.glb     # vanguardとアニメーション共有
+├── phantom/phantom.glb # vanguardとアニメーション共有
+└── vanguard/vanguard.glb # メインキャラクター（アニメーション元）
 ```
 
 ## キャラクター追加手順
 
-全キャラクターは同じARPリグを使用。shadeがアニメーション元となり、他キャラクターはアニメーションを共有。
+全キャラクターは同じARPリグを使用。vanguardがアニメーション元となり、他キャラクターはアニメーションを共有。
 
 ### 1. GLBファイル配置
 ```
@@ -109,8 +109,9 @@ const CHARACTER_PATHS := {
 `scripts/api/character_api.gd`の`ANIMATION_SOURCE`に追加：
 ```gdscript
 const ANIMATION_SOURCE := {
-    "phantom": "shade",
-    "{character_id}": "shade"  # shadeのアニメーションを使用
+    "shade": "vanguard",
+    "phantom": "vanguard",
+    "{character_id}": "vanguard"  # vanguardのアニメーションを使用
 }
 ```
 

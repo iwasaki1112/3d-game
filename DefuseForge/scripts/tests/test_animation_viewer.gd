@@ -22,7 +22,7 @@ var bottom_panel: PanelContainer = null
 # Character selection
 const CHARACTERS_DIR: String = "res://assets/characters/"
 var available_characters: Array[String] = []
-var current_character_id: String = "shade"
+var current_character_id: String = "vanguard"
 
 # Animation sharing is now handled by CharacterAPIScript.ANIMATION_SOURCE
 var character_model: Node3D = null

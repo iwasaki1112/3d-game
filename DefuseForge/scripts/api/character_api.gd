@@ -22,10 +22,10 @@ const PRESET_PATHS := {}
 const PRESET_TEAMS := {}
 
 ## アニメーション共有マッピング（同じリグを使用するキャラクター）
-## phantom uses shade's animations (same ARP rig)
+## All characters use vanguard's animations (same ARP rig)
 const ANIMATION_SOURCE := {
-	"phantom": "shade",
-	"vanguard": "shade"
+	"shade": "vanguard",
+	"phantom": "vanguard"
 }
 
 ## キャラクターディレクトリ
