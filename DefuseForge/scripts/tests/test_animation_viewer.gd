@@ -3,6 +3,7 @@ extends Node3D
 ## Uses the new simplified CharacterBase API
 
 const CharacterAPIScript = preload("res://scripts/api/character_api.gd")
+const FogOfWarSystemScript = preload("res://scripts/systems/fog_of_war_system.gd")
 
 @onready var camera: Camera3D = $OrbitCamera
 @onready var character_body: CharacterBase = $CharacterBody
@@ -63,6 +64,10 @@ var character_resource: CharacterResource = null
 # Shooting
 var is_shooting: bool = false
 
+# Fog of War
+var fog_of_war_system: Node3D = null
+var test_walls: Array[StaticBody3D] = []
+
 
 func _weapon_id_string_to_int(weapon_id: String) -> int:
 	match weapon_id.to_lower():
@@ -119,6 +124,71 @@ func _ready() -> void:
 	# Play idle animation
 	if _animations.size() > 0:
 		_play_animation(_animations[0])
+
+	# Setup Fog of War test environment
+	_setup_fog_of_war()
+	_create_test_walls()
+
+
+func _setup_fog_of_war() -> void:
+	# FogOfWarSystemを作成
+	fog_of_war_system = Node3D.new()
+	fog_of_war_system.set_script(FogOfWarSystemScript)
+	fog_of_war_system.name = "FogOfWarSystem"
+	add_child(fog_of_war_system)
+
+	# キャラクターの視界を登録
+	await get_tree().process_frame
+	if character_body and character_body.vision:
+		fog_of_war_system.register_vision(character_body.vision)
+
+
+func _create_test_walls() -> void:
+	# テスト用の壁を配置（Layer 2に設定）
+	var wall_configs = [
+		{"pos": Vector3(5, 0, 0), "size": Vector3(0.3, 3, 4), "rot": 0},
+		{"pos": Vector3(-4, 0, 3), "size": Vector3(0.3, 3, 3), "rot": 45},
+		{"pos": Vector3(0, 0, -6), "size": Vector3(6, 3, 0.3), "rot": 0},
+		{"pos": Vector3(-6, 0, -2), "size": Vector3(0.3, 3, 5), "rot": 0},
+	]
+
+	for config in wall_configs:
+		var wall = _create_wall(config.size, config.pos, config.rot)
+		test_walls.append(wall)
+		add_child(wall)
+
+
+func _create_wall(size: Vector3, pos: Vector3, rot_degrees: float) -> StaticBody3D:
+	var wall = StaticBody3D.new()
+	wall.collision_layer = 2  # Layer 2 = 壁（VisionComponentのwall_collision_maskと一致）
+	wall.collision_mask = 0   # 他のものと衝突しない
+
+	# メッシュ
+	var mesh_instance = MeshInstance3D.new()
+	var box_mesh = BoxMesh.new()
+	box_mesh.size = size
+	mesh_instance.mesh = box_mesh
+	mesh_instance.position.y = size.y / 2
+
+	# マテリアル
+	var material = StandardMaterial3D.new()
+	material.albedo_color = Color(0.4, 0.4, 0.45)
+	mesh_instance.material_override = material
+
+	# コリジョン
+	var collision = CollisionShape3D.new()
+	var box_shape = BoxShape3D.new()
+	box_shape.size = size
+	collision.shape = box_shape
+	collision.position.y = size.y / 2
+
+	wall.add_child(mesh_instance)
+	wall.add_child(collision)
+
+	wall.position = pos
+	wall.rotation_degrees.y = rot_degrees
+
+	return wall
 
 
 func _scan_available_characters() -> void:
