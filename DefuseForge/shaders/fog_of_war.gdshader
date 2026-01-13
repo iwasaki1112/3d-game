@@ -4,12 +4,12 @@ render_mode unshaded, cull_disabled, depth_draw_never;
 // フォグの色と透明度
 uniform vec4 fog_color : source_color = vec4(0.1, 0.15, 0.25, 0.9);
 
-// 可視性テクスチャ（グリッドベース）
-// filter_nearest: セル単位でくっきり表示（バイリニア補間なし）
-uniform sampler2D visibility_texture : filter_nearest, repeat_disable;
+// 可視性テクスチャ
+// filter_linear: バイリニア補間でエッジをソフト化
+uniform sampler2D visibility_texture : filter_linear, repeat_disable;
 
 // 前フレームの可視性テクスチャ（テンポラル補間用）
-uniform sampler2D prev_visibility_texture : filter_nearest, repeat_disable;
+uniform sampler2D prev_visibility_texture : filter_linear, repeat_disable;
 
 // テンポラル補間の係数（0.0 = 前フレーム、1.0 = 現フレーム）
 // 1.0 = 補間なし（即座に反映）
@@ -38,8 +38,8 @@ void fragment() {
 		// テンポラル補間（temporal_blend = 1.0 で即座反映）
 		float visibility = mix(prev_visibility, current_visibility, temporal_blend);
 
-		// グリッドベース: 0.5以上なら可視、それ以外は不可視（ハードエッジ）
-		visibility = step(0.5, visibility);
+		// ソフトエッジ: smoothstepで滑らかに遷移
+		visibility = smoothstep(0.3, 0.7, visibility);
 
 		// 可視性に基づいてフォグの透明度を計算
 		fog_alpha = fog_color.a * (1.0 - visibility);

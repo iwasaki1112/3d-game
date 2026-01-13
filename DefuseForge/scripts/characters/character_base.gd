@@ -10,7 +10,6 @@ const AnimationComponentScript = preload("res://scripts/characters/components/an
 const WeaponComponentScript = preload("res://scripts/characters/components/weapon_component.gd")
 const HealthComponentScript = preload("res://scripts/characters/components/health_component.gd")
 const VisionComponentScript = preload("res://scripts/characters/components/vision_component.gd")
-const VisionConeMeshScript = preload("res://scripts/effects/vision_cone_mesh.gd")
 
 ## シグナル
 signal path_completed
@@ -36,9 +35,6 @@ var animation: Node  # AnimationComponent
 var weapon: Node     # WeaponComponent
 var health: Node     # HealthComponent
 var vision: Node     # VisionComponent
-
-## 視界メッシュ
-var _vision_cone_mesh: MeshInstance3D
 
 ## 内部参照
 var skeleton: Skeleton3D
@@ -170,17 +166,6 @@ func _setup_components() -> void:
 		vision.set_script(VisionComponentScript)
 		vision.name = "VisionComponent"
 		add_child(vision)
-
-	# VisionConeMesh（視界表示用）
-	if _vision_cone_mesh == null:
-		_vision_cone_mesh = MeshInstance3D.new()
-		_vision_cone_mesh.set_script(VisionConeMeshScript)
-		_vision_cone_mesh.name = "VisionConeMesh"
-		get_parent().call_deferred("add_child", _vision_cone_mesh)
-
-	# 視界更新シグナルを接続
-	if vision and not vision.vision_updated.is_connected(_on_vision_updated):
-		vision.vision_updated.connect(_on_vision_updated)
 
 
 ## シグナルを接続
@@ -416,11 +401,6 @@ func _on_skeleton_updated() -> void:
 		weapon.apply_ik_after_animation()
 
 
-func _on_vision_updated(polygon: PackedVector3Array) -> void:
-	if _vision_cone_mesh:
-		_vision_cone_mesh.update_from_polygon(polygon)
-
-
 ## ========================================
 ## 視界 API
 ## ========================================
@@ -435,12 +415,6 @@ func set_vision_fov(degrees: float) -> void:
 func set_vision_distance(distance: float) -> void:
 	if vision:
 		vision.set_view_distance(distance)
-
-
-## 視界コーンの表示/非表示
-func set_vision_visible(vision_visible: bool) -> void:
-	if _vision_cone_mesh:
-		_vision_cone_mesh.visible = vision_visible
 
 
 ## 視界ポリゴンを取得

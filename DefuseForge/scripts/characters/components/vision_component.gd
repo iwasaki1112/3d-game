@@ -1,8 +1,8 @@
 class_name VisionComponent
 extends Node
 
-## 視界管理コンポーネント
-## キャラクターの視界計算、レイキャスト処理を担当
+## 視界管理コンポーネント（シャドウキャスト方式）
+## 壁セグメントの端点を利用した安定した可視性計算
 
 signal vision_updated(visible_points: PackedVector3Array)
 signal wall_hit_updated(hit_points: PackedVector3Array)
@@ -10,34 +10,18 @@ signal wall_hit_updated(hit_points: PackedVector3Array)
 ## 視界パラメータ
 @export var fov_degrees: float = 90.0           # 視野角（度）
 @export var view_distance: float = 15.0         # 視界距離
-@export var ray_count: int = 30                 # レイキャスト本数（軽量化）
-@export var update_interval: float = 0.1        # 更新間隔（秒）
+@export var edge_ray_count: int = 30            # FOV境界のレイ数（補助）
+@export var update_interval: float = 0.033      # 更新間隔（秒）
 @export var eye_height: float = 1.5             # 目の高さ
 
 ## 壁検出用コリジョンマスク
 @export_flags_3d_physics var wall_collision_mask: int = 2  # Layer 2 = 壁
 
-## 壁ライトエフェクト設定
-@export_group("Wall Light Effect")
-@export var enable_wall_lights: bool = false    # デフォルト無効（パフォーマンス）
-@export var wall_light_energy: float = 0.5
-@export var wall_light_range: float = 2.0
-@export var wall_light_angle: float = 30.0
-@export var wall_light_color: Color = Color(1.0, 0.9, 0.7)
-@export var max_wall_lights: int = 5            # 軽量化
-
 ## 内部変数
 var _character: CharacterBody3D
 var _update_timer: float = 0.0
-var _visible_polygon: PackedVector3Array = []   # 視界ポリゴン頂点
-var _wall_hit_points: PackedVector3Array = []   # 壁ヒットポイント（光エフェクト用）
-
-## キャッシュ
-var _ray_directions: Array[Vector3] = []        # 事前計算したレイ方向
-
-## 壁ライト
-var _wall_lights: Array[SpotLight3D] = []
-var _wall_lights_container: Node3D
+var _visible_polygon: PackedVector3Array = []
+var _wall_hit_points: PackedVector3Array = []
 
 
 func _ready() -> void:
@@ -45,71 +29,6 @@ func _ready() -> void:
 	if _character == null:
 		push_error("[VisionComponent] Parent must be CharacterBody3D")
 		return
-	_precalculate_ray_directions()
-	_setup_wall_lights()
-
-
-## 壁ライトをセットアップ
-func _setup_wall_lights() -> void:
-	if not enable_wall_lights:
-		return
-
-	_wall_lights_container = Node3D.new()
-	_wall_lights_container.name = "WallLights"
-	add_child(_wall_lights_container)
-
-	for i in range(max_wall_lights):
-		var light = SpotLight3D.new()
-		light.light_energy = wall_light_energy
-		light.spot_range = wall_light_range
-		light.spot_angle = wall_light_angle
-		light.light_color = wall_light_color
-		light.shadow_enabled = false  # パフォーマンスのため無効
-		light.visible = false
-		_wall_lights_container.add_child(light)
-		_wall_lights.append(light)
-
-
-## 壁ライトを更新
-func _update_wall_lights() -> void:
-	if not enable_wall_lights or _wall_lights.is_empty():
-		return
-
-	var origin = _character.global_position + Vector3(0, eye_height, 0)
-
-	# ヒットポイントをサンプリング（全部ではなく間隔をあけて）
-	var sample_interval = max(1, int(_wall_hit_points.size() / float(max_wall_lights)))
-	var light_index = 0
-
-	for i in range(0, _wall_hit_points.size(), sample_interval):
-		if light_index >= max_wall_lights:
-			break
-
-		var hit_point = _wall_hit_points[i]
-		var light = _wall_lights[light_index]
-
-		# ライトを壁に向けて配置
-		var direction = (hit_point - origin).normalized()
-		light.global_position = hit_point - direction * 0.5  # 少し手前に
-		light.look_at(hit_point, Vector3.UP)
-		light.visible = true
-		light_index += 1
-
-	# 残りのライトを非表示
-	for i in range(light_index, max_wall_lights):
-		_wall_lights[i].visible = false
-
-
-## レイ方向を事前計算（キャラクターのローカル座標系）
-func _precalculate_ray_directions() -> void:
-	_ray_directions.clear()
-	var half_fov = deg_to_rad(fov_degrees / 2.0)
-	var angle_step = deg_to_rad(fov_degrees) / max(ray_count - 1, 1)
-
-	for i in range(ray_count):
-		var angle = -half_fov + angle_step * i
-		# 前方（-Z）を基準に左右に広がる
-		_ray_directions.append(Vector3(sin(angle), 0, -cos(angle)).normalized())
 
 
 ## 更新処理（CharacterBaseから呼ばれる）
@@ -117,46 +36,140 @@ func update(delta: float) -> void:
 	_update_timer -= delta
 	if _update_timer <= 0:
 		_update_timer = update_interval
-		_calculate_vision()
+		_calculate_shadow_cast_vision()
 
 
-## 視界を計算
-func _calculate_vision() -> void:
+## シャドウキャスト方式で視界を計算
+func _calculate_shadow_cast_vision() -> void:
 	if _character == null:
 		return
 
 	var space_state = _character.get_world_3d().direct_space_state
 	var origin = _character.global_position + Vector3(0, eye_height, 0)
-	var char_rotation = _character.rotation.y
+	# キャラクターの前方ベクトルから角度を計算
+	var forward = _character.global_transform.basis.z  # basis.zは後ろ方向
+	var char_rotation = atan2(forward.x, -forward.z)  # 180度反転
+	var half_fov = deg_to_rad(fov_degrees / 2.0)
 
+	# FOVの境界角度
+	var fov_min_angle = char_rotation - half_fov
+	var fov_max_angle = char_rotation + half_fov
+
+	# 壁のコーナーポイントを収集
+	var wall_corners = _collect_wall_corners(origin)
+
+	# レイを発射する角度のリストを作成
+	var ray_angles: Array[float] = []
+
+	# 1. FOVの境界と内部に均等にレイを配置
+	for i in range(edge_ray_count + 1):
+		var t = float(i) / float(edge_ray_count)
+		var angle = fov_min_angle + t * (fov_max_angle - fov_min_angle)
+		ray_angles.append(angle)
+
+	# 2. 壁コーナーへのレイ（コーナーの少し左右にも）
+	for corner in wall_corners:
+		var to_corner = Vector2(corner.x - origin.x, corner.z - origin.z)
+		var corner_angle = atan2(to_corner.x, -to_corner.y)  # -Zが前方
+
+		# FOV内のコーナーのみ
+		var relative_angle = _wrap_angle(corner_angle - char_rotation)
+		if abs(relative_angle) <= half_fov + 0.01:
+			# コーナーとその少し左右
+			ray_angles.append(corner_angle - 0.001)
+			ray_angles.append(corner_angle)
+			ray_angles.append(corner_angle + 0.001)
+
+	# 角度でソート
+	ray_angles.sort()
+
+	# 重複を除去
+	var unique_angles: Array[float] = []
+	for angle in ray_angles:
+		if unique_angles.is_empty() or abs(angle - unique_angles[-1]) > 0.0001:
+			unique_angles.append(angle)
+
+	# 各角度にレイを発射
 	_visible_polygon.clear()
 	_wall_hit_points.clear()
 
-	# 原点を追加（メッシュ生成用）
+	# 原点を最初に追加
 	_visible_polygon.append(origin)
 
-	for ray_dir in _ray_directions:
-		# キャラクターの回転を適用
-		var rotated_dir = ray_dir.rotated(Vector3.UP, char_rotation)
-		var end_point = origin + rotated_dir * view_distance
+	for angle in unique_angles:
+		# FOV範囲内かチェック
+		var relative = _wrap_angle(angle - char_rotation)
+		if abs(relative) > half_fov:
+			continue
+
+		var direction = Vector3(sin(angle), 0, -cos(angle))  # キャラクターの前方(-Z)に合わせる
+		var end_point = origin + direction * view_distance
 
 		var query = PhysicsRayQueryParameters3D.create(origin, end_point, wall_collision_mask)
-		query.exclude = [_character.get_rid()]  # 自分自身を除外
+		query.exclude = [_character.get_rid()]
 		var result = space_state.intersect_ray(query)
 
 		if result:
-			# 壁にヒット
 			_visible_polygon.append(result.position)
 			_wall_hit_points.append(result.position)
 		else:
-			# 最大距離まで視認可能
 			_visible_polygon.append(end_point)
 
 	vision_updated.emit(_visible_polygon)
 	wall_hit_updated.emit(_wall_hit_points)
 
-	# 壁ライトを更新
-	_update_wall_lights()
+
+## 壁のコーナーポイントを収集
+func _collect_wall_corners(origin: Vector3) -> Array[Vector3]:
+	var corners: Array[Vector3] = []
+
+	# シーン内の壁（Layer 2）を検索
+	var walls = get_tree().get_nodes_in_group("walls")
+
+	for wall in walls:
+		if wall is StaticBody3D:
+			# 壁のコリジョンシェイプからコーナーを取得
+			for child in wall.get_children():
+				if child is CollisionShape3D:
+					var shape = child.shape
+					if shape is BoxShape3D:
+						var box_corners = _get_box_corners(wall.global_transform, child.transform, shape)
+						for corner in box_corners:
+							var dist = Vector2(corner.x - origin.x, corner.z - origin.z).length()
+							if dist <= view_distance * 1.5:  # 視界距離内のみ
+								corners.append(corner)
+
+	return corners
+
+
+## BoxShapeのコーナー座標を取得
+func _get_box_corners(wall_transform: Transform3D, shape_transform: Transform3D, shape: BoxShape3D) -> Array[Vector3]:
+	var corners: Array[Vector3] = []
+	var half_size = shape.size / 2.0
+
+	# ローカル座標でのコーナー（XZ平面の4隅）
+	var local_corners = [
+		Vector3(-half_size.x, 0, -half_size.z),
+		Vector3(half_size.x, 0, -half_size.z),
+		Vector3(half_size.x, 0, half_size.z),
+		Vector3(-half_size.x, 0, half_size.z),
+	]
+
+	# グローバル座標に変換
+	var combined_transform = wall_transform * shape_transform
+	for local_corner in local_corners:
+		corners.append(combined_transform * local_corner)
+
+	return corners
+
+
+## 角度を-PI〜PIにラップ
+func _wrap_angle(angle: float) -> float:
+	while angle > PI:
+		angle -= TAU
+	while angle < -PI:
+		angle += TAU
+	return angle
 
 
 ## 視界ポリゴンを取得
@@ -164,7 +177,7 @@ func get_visible_polygon() -> PackedVector3Array:
 	return _visible_polygon
 
 
-## 壁ヒットポイントを取得（光エフェクト用）
+## 壁ヒットポイントを取得
 func get_wall_hit_points() -> PackedVector3Array:
 	return _wall_hit_points
 
@@ -172,7 +185,6 @@ func get_wall_hit_points() -> PackedVector3Array:
 ## 視野角を変更
 func set_fov(degrees: float) -> void:
 	fov_degrees = degrees
-	_precalculate_ray_directions()
 
 
 ## 視界距離を変更
@@ -182,4 +194,4 @@ func set_view_distance(distance: float) -> void:
 
 ## 即座に視界を更新
 func force_update() -> void:
-	_calculate_vision()
+	_calculate_shadow_cast_vision()

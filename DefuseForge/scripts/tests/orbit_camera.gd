@@ -20,6 +20,9 @@ var _is_panning: bool = false   # 中クリックドラッグ
 var _last_mouse_pos: Vector2 = Vector2.ZERO
 var _target_offset: Vector3 = Vector3.ZERO  # パン操作によるオフセット
 
+## 外部から入力を無効化するフラグ
+var input_disabled: bool = false
+
 # Multi-touch for pinch zoom
 var _touch_points: Dictionary = {}  # touch_index -> position
 var _initial_pinch_distance: float = 0.0
@@ -33,6 +36,12 @@ func _ready() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	# 入力が無効化されている場合は無視
+	if input_disabled:
+		_is_rotating = false
+		_is_panning = false
+		return
+
 	# UIコントロール上の操作を無視
 	if _is_mouse_over_ui():
 		_is_rotating = false
@@ -170,6 +179,15 @@ func set_target(new_target: Node3D) -> void:
 func reset_pan() -> void:
 	## パンオフセットをリセット
 	_target_offset = Vector3.ZERO
+	_update_camera_position()
+
+
+func pan_offset(delta_x: float, delta_y: float) -> void:
+	## 外部からパン操作を行う
+	var right := global_transform.basis.x
+	var up := global_transform.basis.y
+	_target_offset -= right * delta_x * pan_speed * distance
+	_target_offset += up * delta_y * pan_speed * distance
 	_update_camera_position()
 
 

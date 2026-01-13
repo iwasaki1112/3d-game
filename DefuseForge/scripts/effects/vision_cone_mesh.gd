@@ -2,13 +2,12 @@ class_name VisionConeMesh
 extends MeshInstance3D
 
 ## 視界コーンメッシュ生成
-## VisionComponentの結果を半透明メッシュとして描画
+## フォグの「穴」として描画し、視界内をクリアにする
 
-@export var cone_color: Color = Color(1.0, 0.9, 0.5, 0.15)  # 半透明の黄色
-@export var cone_height: float = 0.05  # 地面からの高さ
+@export var cone_height: float = 0.15  # フォグより少し上に配置
 
 var _array_mesh: ArrayMesh
-var _material: StandardMaterial3D
+var _material: ShaderMaterial
 
 
 func _ready() -> void:
@@ -19,12 +18,22 @@ func _setup_mesh() -> void:
 	_array_mesh = ArrayMesh.new()
 	mesh = _array_mesh
 
-	_material = StandardMaterial3D.new()
-	_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_material.albedo_color = cone_color
-	_material.no_depth_test = true  # 常に表示
+	# フォグを「消す」シェーダー
+	var shader_code = """
+shader_type spatial;
+render_mode unshaded, cull_disabled, depth_draw_never, blend_mix;
+
+void fragment() {
+	ALBEDO = vec3(0.0);
+	ALPHA = 0.0;
+}
+"""
+	var shader = Shader.new()
+	shader.code = shader_code
+
+	_material = ShaderMaterial.new()
+	_material.shader = shader
+	_material.render_priority = 1  # フォグより後に描画
 	material_override = _material
 
 
@@ -52,17 +61,11 @@ func update_from_polygon(polygon: PackedVector3Array) -> void:
 		var p = polygon[i]
 		vertices.append(Vector3(p.x, cone_height, p.z))
 
-	# 三角形ファンでインデックスを生成
+	# 三角形ファンでインデックスを生成（扇形なので閉じない）
 	for i in range(1, polygon.size() - 1):
 		indices.append(0)      # 原点
 		indices.append(i)      # 現在の点
 		indices.append(i + 1)  # 次の点
-
-	# 最後の三角形（最後の点と最初の外周点を結ぶ）
-	if polygon.size() > 2:
-		indices.append(0)
-		indices.append(polygon.size() - 1)
-		indices.append(1)
 
 	# メッシュを構築
 	_array_mesh.clear_surfaces()
@@ -74,15 +77,3 @@ func update_from_polygon(polygon: PackedVector3Array) -> void:
 
 	_array_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	_array_mesh.surface_set_material(0, _material)
-
-
-## 色を設定
-func set_cone_color(color: Color) -> void:
-	cone_color = color
-	if _material:
-		_material.albedo_color = cone_color
-
-
-## 表示/非表示を切り替え
-func set_visible_cone(cone_visible: bool) -> void:
-	visible = cone_visible
