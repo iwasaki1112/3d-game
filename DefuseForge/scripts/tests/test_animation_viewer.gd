@@ -3,6 +3,7 @@ extends Node3D
 ## Uses the new simplified CharacterBase API
 
 const CharacterAPIScript = preload("res://scripts/api/character_api.gd")
+const FogOfWarSystemScript = preload("res://scripts/systems/fog_of_war_system.gd")
 
 @onready var camera: Camera3D = $OrbitCamera
 @onready var character_body: CharacterBase = $CharacterBody
@@ -11,6 +12,7 @@ const CharacterAPIScript = preload("res://scripts/api/character_api.gd")
 var _animations: Array[String] = []
 const GRAVITY: float = 9.8
 const DEFAULT_BLEND_TIME: float = 0.3
+const MOVE_SPEED: float = 5.0  # 移動速度
 var blend_time: float = DEFAULT_BLEND_TIME
 var blend_time_label: Label = null
 
@@ -62,6 +64,15 @@ var character_resource: CharacterResource = null
 
 # Shooting
 var is_shooting: bool = false
+
+# Fog of War
+var fog_of_war_system: Node3D = null
+var test_walls: Array[StaticBody3D] = []
+var wall_shader_material: ShaderMaterial = null
+
+# Character rotation control (click on character + drag)
+var _is_holding_character: bool = false
+var _ground_plane: Plane = Plane(Vector3.UP, 0.0)
 
 
 func _weapon_id_string_to_int(weapon_id: String) -> int:
@@ -119,6 +130,191 @@ func _ready() -> void:
 	# Play idle animation
 	if _animations.size() > 0:
 		_play_animation(_animations[0])
+
+	# Setup Fog of War test environment
+	_setup_fog_of_war()
+	_create_test_walls()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	# 左クリックでキャラクターをクリックしたかチェック
+	if event is InputEventMouseButton:
+		var mouse_event = event as InputEventMouseButton
+		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
+			if mouse_event.pressed:
+				# クリック時にキャラクターに当たったかチェック
+				_is_holding_character = _is_clicking_on_character(mouse_event.position)
+				if _is_holding_character and camera:
+					# カメラの入力を無効化
+					camera.input_disabled = true
+			else:
+				_is_holding_character = false
+				if camera:
+					# カメラの入力を再有効化
+					camera.input_disabled = false
+
+	# キャラクターを長押し中にドラッグで回転
+	if event is InputEventMouseMotion and _is_holding_character:
+		_rotate_character_to_mouse(event.position)
+
+
+func _is_clicking_on_character(mouse_pos: Vector2) -> bool:
+	if not camera or not character_body:
+		return false
+
+	# マウス位置からレイを作成
+	var ray_origin = camera.project_ray_origin(mouse_pos)
+	var ray_direction = camera.project_ray_normal(mouse_pos)
+	var ray_end = ray_origin + ray_direction * 100.0
+
+	# レイキャストでキャラクターに当たるかチェック
+	var space_state = get_world_3d().direct_space_state
+	var query = PhysicsRayQueryParameters3D.create(ray_origin, ray_end)
+	query.collision_mask = 1  # Layer 1 = キャラクター
+	var result = space_state.intersect_ray(query)
+
+	if result and result.collider == character_body:
+		return true
+
+	# キャラクター付近をクリックした場合も許容（半径1.5m以内）
+	var intersection = _ground_plane.intersects_ray(ray_origin, ray_direction)
+	if intersection:
+		var click_pos = intersection as Vector3
+		var char_pos = character_body.global_position
+		if click_pos.distance_to(char_pos) < 1.5:
+			return true
+
+	return false
+
+
+func _rotate_character_to_mouse(mouse_pos: Vector2) -> void:
+	if not character_body or not camera:
+		return
+
+	# マウス位置からレイを作成
+	var ray_origin = camera.project_ray_origin(mouse_pos)
+	var ray_direction = camera.project_ray_normal(mouse_pos)
+
+	# 地面との交点を計算
+	var intersection = _ground_plane.intersects_ray(ray_origin, ray_direction)
+	if intersection == null:
+		return
+
+	# キャラクターからマウス位置への方向を計算
+	var char_pos = character_body.global_position
+	var target_pos = intersection as Vector3
+	var direction = target_pos - char_pos
+	direction.y = 0  # 水平方向のみ
+
+	if direction.length_squared() < 0.01:
+		return
+
+	# キャラクターを回転
+	var target_angle = atan2(direction.x, direction.z)
+	character_body.rotation.y = target_angle
+
+
+func _setup_fog_of_war() -> void:
+	# FogOfWarSystemを作成
+	fog_of_war_system = Node3D.new()
+	fog_of_war_system.set_script(FogOfWarSystemScript)
+	fog_of_war_system.name = "FogOfWarSystem"
+	add_child(fog_of_war_system)
+
+	# キャラクターの視界を登録
+	await get_tree().process_frame
+	if character_body and character_body.vision:
+		fog_of_war_system.register_vision(character_body.vision)
+
+
+func _create_test_walls() -> void:
+	# 壁用シェーダーマテリアルを作成
+	_create_wall_shader_material()
+
+	# テスト用の壁を配置（Layer 2に設定）
+	var wall_configs = [
+		{"pos": Vector3(5, 0, 0), "size": Vector3(0.3, 3, 4), "rot": 0},
+		{"pos": Vector3(-4, 0, 3), "size": Vector3(0.3, 3, 3), "rot": 45},
+		{"pos": Vector3(0, 0, -6), "size": Vector3(6, 3, 0.3), "rot": 0},
+		{"pos": Vector3(-6, 0, -2), "size": Vector3(0.3, 3, 5), "rot": 0},
+	]
+
+	for config in wall_configs:
+		var wall = _create_wall(config.size, config.pos, config.rot)
+		test_walls.append(wall)
+		add_child(wall)
+
+
+func _create_wall_shader_material() -> void:
+	var shader_code = """
+shader_type spatial;
+
+uniform vec4 base_color : source_color = vec4(0.4, 0.4, 0.45, 1.0);
+uniform vec4 lit_color : source_color = vec4(0.8, 0.75, 0.6, 1.0);
+uniform sampler2D visibility_texture : filter_linear, hint_default_black;
+uniform vec2 map_min = vec2(-20.0, -20.0);
+uniform vec2 map_max = vec2(20.0, 20.0);
+uniform float light_intensity = 0.6;
+
+void fragment() {
+	// ワールド座標を取得
+	vec3 world_pos = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	vec2 world_xz = world_pos.xz;
+
+	// ワールド座標をUV座標に変換
+	vec2 uv = (world_xz - map_min) / (map_max - map_min);
+
+	// テクスチャから可視性を取得
+	float visibility = texture(visibility_texture, uv).r;
+
+	// 視界内は明るく、視界外は暗く
+	vec3 final_color = mix(base_color.rgb, lit_color.rgb, visibility * light_intensity);
+
+	ALBEDO = final_color;
+}
+"""
+	var shader = Shader.new()
+	shader.code = shader_code
+
+	wall_shader_material = ShaderMaterial.new()
+	wall_shader_material.shader = shader
+	wall_shader_material.set_shader_parameter("base_color", Color(0.25, 0.25, 0.3))
+	wall_shader_material.set_shader_parameter("lit_color", Color(0.7, 0.65, 0.5))
+	wall_shader_material.set_shader_parameter("map_min", Vector2(-20, -20))
+	wall_shader_material.set_shader_parameter("map_max", Vector2(20, 20))
+
+
+func _create_wall(size: Vector3, pos: Vector3, rot_degrees: float) -> StaticBody3D:
+	var wall = StaticBody3D.new()
+	wall.collision_layer = 2  # Layer 2 = 壁（VisionComponentのwall_collision_maskと一致）
+	wall.collision_mask = 0   # 他のものと衝突しない
+	wall.add_to_group("walls")  # シャドウキャスト用のグループ
+
+	# メッシュ
+	var mesh_instance = MeshInstance3D.new()
+	var box_mesh = BoxMesh.new()
+	box_mesh.size = size
+	mesh_instance.mesh = box_mesh
+	mesh_instance.position.y = size.y / 2
+
+	# シェーダーマテリアルを適用（視界に応じて明るさが変わる）
+	if wall_shader_material:
+		mesh_instance.material_override = wall_shader_material
+
+	# コリジョン
+	var collision = CollisionShape3D.new()
+	var box_shape = BoxShape3D.new()
+	box_shape.size = size
+	collision.shape = box_shape
+	collision.position.y = size.y / 2
+
+	wall.add_child(mesh_instance)
+	wall.add_child(collision)
+
+	wall.position = pos
+	wall.rotation_degrees.y = rot_degrees
+
+	return wall
 
 
 func _scan_available_characters() -> void:
@@ -576,11 +772,40 @@ func _collect_animations() -> void:
 
 func _physics_process(delta: float) -> void:
 	if character_body:
+		# WASD移動入力
+		var input_dir = Vector3.ZERO
+		if Input.is_key_pressed(KEY_W):
+			input_dir.z -= 1
+		if Input.is_key_pressed(KEY_S):
+			input_dir.z += 1
+		if Input.is_key_pressed(KEY_A):
+			input_dir.x -= 1
+		if Input.is_key_pressed(KEY_D):
+			input_dir.x += 1
+
+		# 正規化して速度を適用
+		if input_dir.length_squared() > 0:
+			input_dir = input_dir.normalized()
+			character_body.velocity.x = input_dir.x * MOVE_SPEED
+			character_body.velocity.z = input_dir.z * MOVE_SPEED
+		else:
+			character_body.velocity.x = 0
+			character_body.velocity.z = 0
+
+		# 重力
 		if not character_body.is_on_floor():
 			character_body.velocity.y -= GRAVITY * delta
 		else:
 			character_body.velocity.y = 0
 		character_body.move_and_slide()
+
+
+func _process(_delta: float) -> void:
+	# 壁シェーダーに可視性テクスチャを渡す
+	if wall_shader_material and fog_of_war_system:
+		var visibility_tex = fog_of_war_system.get_visibility_texture()
+		if visibility_tex:
+			wall_shader_material.set_shader_parameter("visibility_texture", visibility_tex)
 
 
 func _input(event: InputEvent) -> void:

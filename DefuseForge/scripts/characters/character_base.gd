@@ -9,6 +9,7 @@ const MovementComponentScript = preload("res://scripts/characters/components/mov
 const AnimationComponentScript = preload("res://scripts/characters/components/animation_component.gd")
 const WeaponComponentScript = preload("res://scripts/characters/components/weapon_component.gd")
 const HealthComponentScript = preload("res://scripts/characters/components/health_component.gd")
+const VisionComponentScript = preload("res://scripts/characters/components/vision_component.gd")
 
 ## シグナル
 signal path_completed
@@ -33,6 +34,7 @@ var movement: Node  # MovementComponent
 var animation: Node  # AnimationComponent
 var weapon: Node     # WeaponComponent
 var health: Node     # HealthComponent
+var vision: Node     # VisionComponent
 
 ## 内部参照
 var skeleton: Skeleton3D
@@ -67,6 +69,8 @@ func _physics_process(delta: float) -> void:
 	if weapon:
 		weapon.update()
 		weapon.update_ik()
+	if vision:
+		vision.update(delta)
 
 	move_and_slide()
 
@@ -154,6 +158,14 @@ func _setup_components() -> void:
 	# スケルトン更新シグナルを接続
 	if skeleton:
 		skeleton.skeleton_updated.connect(_on_skeleton_updated)
+
+	# VisionComponent
+	vision = get_node_or_null("VisionComponent")
+	if vision == null:
+		vision = Node.new()
+		vision.set_script(VisionComponentScript)
+		vision.name = "VisionComponent"
+		add_child(vision)
 
 
 ## シグナルを接続
@@ -387,3 +399,29 @@ func _on_skeleton_updated() -> void:
 	# Apply IK after animation is processed
 	if weapon:
 		weapon.apply_ik_after_animation()
+
+
+## ========================================
+## 視界 API
+## ========================================
+
+## 視野角を設定
+func set_vision_fov(degrees: float) -> void:
+	if vision:
+		vision.set_fov(degrees)
+
+
+## 視界距離を設定
+func set_vision_distance(distance: float) -> void:
+	if vision:
+		vision.set_view_distance(distance)
+
+
+## 視界ポリゴンを取得
+func get_vision_polygon() -> PackedVector3Array:
+	return vision.get_visible_polygon() if vision else PackedVector3Array()
+
+
+## 壁ヒットポイントを取得
+func get_wall_hit_points() -> PackedVector3Array:
+	return vision.get_wall_hit_points() if vision else PackedVector3Array()
