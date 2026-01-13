@@ -37,6 +37,7 @@ script = ExtResource("1_script")
 
 [node name="RayCast3D" type="RayCast3D" parent="."]
 target_position = Vector3(0, 0, -100)
+collision_mask = 3
 
 [node name="LaserBeam" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 0, -0.5)
