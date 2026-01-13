@@ -30,6 +30,9 @@ var _left_hand_original_position: Vector3 = Vector3.ZERO
 var _character_hand_ik_offset: Vector3 = Vector3.ZERO
 var _character_elbow_pole_offset: Vector3 = Vector3.ZERO
 
+## レーザーポインター
+var laser_pointer: Node3D  # LaserPointer instance
+
 
 func _ready() -> void:
 	pass
@@ -141,6 +144,9 @@ func _attach_weapon() -> void:
 	# 左手IKをセットアップ
 	_setup_left_hand_ik()
 
+	# レーザーポインターを検索
+	_find_laser_pointer()
+
 
 ## リコイルを回復
 func _recover_recoil() -> void:
@@ -155,6 +161,7 @@ func _recover_recoil() -> void:
 ## 武器をクリーンアップ
 func _cleanup_weapon() -> void:
 	_cleanup_left_hand_ik()
+	laser_pointer = null
 
 	if weapon_attachment:
 		weapon_attachment.queue_free()
@@ -353,3 +360,26 @@ func _cleanup_left_hand_ik() -> void:
 		left_hand_ik.queue_free()
 		left_hand_ik = null
 	left_hand_target = null
+
+
+## 武器からレーザーポインターを検索
+func _find_laser_pointer() -> void:
+	if current_weapon == null:
+		return
+
+	# MuzzlePoint/LaserPointer を検索
+	var muzzle_point = current_weapon.find_child("MuzzlePoint", true, false)
+	if muzzle_point:
+		laser_pointer = muzzle_point.find_child("LaserPointer", false, false)
+
+
+## レーザーポインターをトグル
+func toggle_laser() -> void:
+	if laser_pointer:
+		laser_pointer.toggle()
+
+
+## レーザーポインターを有効化
+func set_laser_active(active: bool) -> void:
+	if laser_pointer:
+		laser_pointer.set_active(active)

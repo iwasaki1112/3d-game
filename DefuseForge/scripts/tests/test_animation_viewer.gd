@@ -587,6 +587,8 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_SPACE:
 			_shoot()
+		elif event.keycode == KEY_L:
+			_toggle_laser()
 
 
 func _on_character_selected(index: int) -> void:
@@ -844,3 +846,9 @@ func _on_camera_right() -> void:
 func _on_camera_top() -> void:
 	if camera:
 		camera.set_top_view()
+
+
+func _toggle_laser() -> void:
+	if character_body and character_body.weapon:
+		character_body.weapon.toggle_laser()
+		print("[AnimViewer] Laser toggled")

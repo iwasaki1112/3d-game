@@ -1,0 +1,47 @@
+[gd_scene load_steps=6 format=3 uid="uid://cqv8xw2jk7ysp"]
+
+[ext_resource type="Script" path="res://scripts/effects/laser_pointer.gd" id="1_script"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_beam"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(1, 0, 0, 0.8)
+emission_enabled = true
+emission = Color(1, 0, 0, 1)
+emission_energy_multiplier = 3.0
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_beam"]
+material = SubResource("StandardMaterial3D_beam")
+top_radius = 0.002
+bottom_radius = 0.002
+height = 1.0
+radial_segments = 8
+rings = 1
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dot"]
+shading_mode = 0
+albedo_color = Color(1, 0, 0, 1)
+emission_enabled = true
+emission = Color(1, 0, 0, 1)
+emission_energy_multiplier = 5.0
+
+[sub_resource type="SphereMesh" id="SphereMesh_dot"]
+material = SubResource("StandardMaterial3D_dot")
+radius = 0.015
+height = 0.03
+radial_segments = 16
+rings = 8
+
+[node name="LaserPointer" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="RayCast3D" type="RayCast3D" parent="."]
+target_position = Vector3(0, 0, -100)
+
+[node name="LaserBeam" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, 1, 0, -1, -4.37114e-08, 0, 0, -0.5)
+mesh = SubResource("CylinderMesh_beam")
+
+[node name="LaserDot" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1)
+mesh = SubResource("SphereMesh_dot")
