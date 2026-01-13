@@ -6,9 +6,10 @@ extends Node
 
 signal rotation_started()
 signal rotation_ended()
+signal clicked()  ## Emitted on short click (not long-press)
 
-## Proximity check radius for click detection
-@export var click_radius: float = 1.5
+## Proximity check radius for click detection (fallback when raycast misses)
+@export var click_radius: float = 0.3
 ## Collision mask for character detection (Layer 1 = characters)
 @export_flags_3d_physics var character_collision_mask: int = 1
 ## Ground plane height for mouse intersection calculation
@@ -59,6 +60,9 @@ func _unhandled_input(event: InputEvent) -> void:
 					_hold_timer = 0.0
 					_hold_mouse_pos = mouse_event.position
 			else:
+				if _is_holding and not _is_rotating:
+					# Short click - not long-press for rotation
+					clicked.emit()
 				_is_holding = false
 				_hold_timer = 0.0
 				if _is_rotating:

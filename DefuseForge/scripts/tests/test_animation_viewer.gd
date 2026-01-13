@@ -127,6 +127,10 @@ func _ready() -> void:
 	if camera.has_method("set_target") and character_body:
 		camera.set_target(character_body)
 
+	# Setup outline camera (SubViewport方式に必要)
+	if character_body:
+		character_body.setup_outline_camera(camera)
+
 	# Setup input rotation component
 	_setup_input_rotation()
 
@@ -146,6 +150,7 @@ func _setup_input_rotation() -> void:
 	_input_rotation.setup(camera)
 	_input_rotation.rotation_started.connect(func(): camera.input_disabled = true)
 	_input_rotation.rotation_ended.connect(func(): camera.input_disabled = false)
+	_input_rotation.clicked.connect(_on_character_clicked)
 
 
 func _setup_fog_of_war() -> void:
@@ -461,6 +466,18 @@ func _populate_left_panel() -> void:
 	top_btn.text = "Top"
 	top_btn.pressed.connect(_on_camera_top)
 	vbox.add_child(top_btn)
+
+	vbox.add_child(HSeparator.new())
+
+	# Selection highlight
+	var select_label = Label.new()
+	select_label.text = "Selection"
+	vbox.add_child(select_label)
+
+	var select_btn = CheckButton.new()
+	select_btn.text = "Highlight"
+	select_btn.toggled.connect(_on_selection_toggled)
+	vbox.add_child(select_btn)
 
 
 func _populate_right_panel() -> void:
@@ -966,6 +983,19 @@ func _on_camera_right() -> void:
 func _on_camera_top() -> void:
 	if camera:
 		camera.set_top_view()
+
+
+func _on_selection_toggled(toggled_on: bool) -> void:
+	if character_body:
+		character_body.set_selected(toggled_on)
+		print("[AnimViewer] Selection highlight: %s" % toggled_on)
+
+
+func _on_character_clicked() -> void:
+	if character_body:
+		var new_state = not character_body.is_selected()
+		character_body.set_selected(new_state)
+		print("[AnimViewer] Character clicked - selected: %s" % new_state)
 
 
 func _toggle_laser() -> void:

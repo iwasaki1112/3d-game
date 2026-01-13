@@ -10,6 +10,7 @@ const AnimationComponentScript = preload("res://scripts/characters/components/an
 const WeaponComponentScript = preload("res://scripts/characters/components/weapon_component.gd")
 const HealthComponentScript = preload("res://scripts/characters/components/health_component.gd")
 const VisionComponentScript = preload("res://scripts/characters/components/vision_component.gd")
+const OutlineComponentScript = preload("res://scripts/characters/components/outline_component.gd")
 
 ## シグナル
 signal path_completed
@@ -35,6 +36,7 @@ var animation: Node  # AnimationComponent
 var weapon: Node     # WeaponComponent
 var health: Node     # HealthComponent
 var vision: Node     # VisionComponent
+var outline: Node    # OutlineComponent
 
 ## 内部参照
 var skeleton: Skeleton3D
@@ -166,6 +168,15 @@ func _setup_components() -> void:
 		vision.set_script(VisionComponentScript)
 		vision.name = "VisionComponent"
 		add_child(vision)
+
+	# OutlineComponent
+	outline = get_node_or_null("OutlineComponent")
+	if outline == null:
+		outline = Node.new()
+		outline.set_script(OutlineComponentScript)
+		outline.name = "OutlineComponent"
+		add_child(outline)
+	# Note: outline.setup() is called separately via setup_outline_camera()
 
 
 ## シグナルを接続
@@ -425,3 +436,36 @@ func get_vision_polygon() -> PackedVector3Array:
 ## 壁ヒットポイントを取得
 func get_wall_hit_points() -> PackedVector3Array:
 	return vision.get_wall_hit_points() if vision else PackedVector3Array()
+
+
+## ========================================
+## 選択 API
+## ========================================
+
+## アウトラインにカメラを設定（SubViewport方式に必要）
+func setup_outline_camera(camera: Camera3D) -> void:
+	if outline:
+		outline.setup(self, camera)
+
+
+## 選択状態を設定
+func set_selected(selected: bool) -> void:
+	if outline:
+		outline.set_selected(selected)
+
+
+## 選択状態を取得
+func is_selected() -> bool:
+	return outline.is_selected() if outline else false
+
+
+## アウトライン色を設定
+func set_outline_color(color: Color) -> void:
+	if outline:
+		outline.set_outline_color(color)
+
+
+## アウトライン幅を設定
+func set_outline_width(width: float) -> void:
+	if outline:
+		outline.set_outline_width(width)
