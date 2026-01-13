@@ -8,7 +8,7 @@ extends Node3D
 ## 設定
 @export_group("Map Settings")
 @export var map_size: Vector2 = Vector2(40, 40)
-@export var fog_height: float = 0.1
+@export var fog_height: float = 0.02
 
 @export_group("Visual Settings")
 @export var fog_color: Color = Color(0.1, 0.15, 0.25, 0.85)
