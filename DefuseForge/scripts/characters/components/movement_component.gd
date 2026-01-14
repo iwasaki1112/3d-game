@@ -2,16 +2,19 @@ class_name MovementComponent
 extends Node
 
 ## 移動管理コンポーネント
-## パス追従、速度管理を担当
+## パス追従、速度管理、移動マーカー表示を担当
 
 signal waypoint_reached(index: int)
 signal path_completed
 signal locomotion_changed(state: int)  # 0=idle, 1=walk, 2=run
 
+const MovementMarkerScript = preload("res://scripts/effects/movement_marker.gd")
+
 @export var walk_speed: float = 3.0
 @export var run_speed: float = 6.0
 @export var rotation_speed: float = 10.0
 @export var waypoint_threshold: float = 0.3
+@export var show_movement_marker: bool = true  ## 移動時にマーカーを表示するか
 
 ## 移動状態
 enum LocomotionState { IDLE, WALK, RUN }
@@ -29,12 +32,34 @@ var _character: CharacterBody3D
 var _input_direction: Vector3 = Vector3.ZERO
 var _use_input_mode: bool = false
 
+## 移動マーカー
+var _movement_marker: MeshInstance3D = null
+
 
 func _ready() -> void:
 	# 親がCharacterBody3Dであることを期待
 	_character = get_parent() as CharacterBody3D
 	if _character == null:
 		push_error("[MovementComponent] Parent must be CharacterBody3D")
+
+	# 移動マーカーを作成（シーンのルートに追加）
+	_setup_movement_marker()
+
+
+## 移動マーカーをセットアップ
+func _setup_movement_marker() -> void:
+	if not show_movement_marker:
+		return
+
+	_movement_marker = MeshInstance3D.new()
+	_movement_marker.set_script(MovementMarkerScript)
+	_movement_marker.name = "MovementMarker"
+
+	# シーンのルートに追加（キャラクターの子にすると一緒に動いてしまう）
+	if _character:
+		var root = _character.get_tree().current_scene
+		if root:
+			root.add_child.call_deferred(_movement_marker)
 
 
 ## パスを設定して移動開始
@@ -50,6 +75,9 @@ func set_path(points: Array[Vector3], run: bool = false) -> void:
 	is_running = run
 	is_moving = true
 	_update_locomotion_state()
+
+	# 移動マーカーを表示
+	_show_movement_marker()
 
 
 ## 単一の目標地点に移動
@@ -67,6 +95,9 @@ func stop() -> void:
 	is_moving = false
 	is_running = false
 	_update_locomotion_state()
+
+	# 移動マーカーを非表示
+	_hide_movement_marker()
 
 
 ## 走る/歩くを切り替え
@@ -93,6 +124,9 @@ func set_input_direction(direction: Vector3, run: bool = false) -> void:
 func update(delta: float) -> Vector3:
 	if _character == null:
 		return Vector3.ZERO
+
+	# 移動マーカーの位置を更新
+	_update_movement_marker()
 
 	# リアルタイム入力モードの場合
 	if _use_input_mode:
@@ -191,3 +225,25 @@ func _update_input_mode(delta: float) -> Vector3:
 		velocity.y = 0
 
 	return velocity
+
+
+## ========================================
+## 移動マーカー管理
+## ========================================
+
+## 移動マーカーを表示
+func _show_movement_marker() -> void:
+	if _movement_marker and show_movement_marker:
+		_movement_marker.show_marker()
+
+
+## 移動マーカーを非表示
+func _hide_movement_marker() -> void:
+	if _movement_marker:
+		_movement_marker.hide_marker()
+
+
+## 移動マーカーの位置を更新
+func _update_movement_marker() -> void:
+	if _movement_marker and _character and is_moving:
+		_movement_marker.update_position(_character.global_position)

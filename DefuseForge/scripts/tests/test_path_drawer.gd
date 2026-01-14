@@ -1,13 +1,12 @@
 extends Node3D
 
 ## パスドロワーのテストシーン
-## キャラクター選択 → コンテキストメニュー → パス描画
+## キャラクター選択 → コンテキストメニュー → パス描画 → 実行
 
 const SelectionManagerScript = preload("res://scripts/managers/selection_manager.gd")
 const ContextMenuScript = preload("res://scripts/ui/context_menu_component.gd")
 const InputRotationScript = preload("res://scripts/characters/components/input_rotation_component.gd")
 const InteractionManagerScript = preload("res://scripts/managers/character_interaction_manager.gd")
-const MovementMarkerScript = preload("res://scripts/effects/movement_marker.gd")
 
 @onready var camera: Camera3D = $OrbitCamera
 @onready var path_drawer: Node3D = $PathDrawer
@@ -22,10 +21,6 @@ var _context_menu: Control
 var _input_rotation: Node
 var _interaction_manager: Node
 var _selected_character: CharacterBody3D
-var _movement_marker: MeshInstance3D
-var _moving_character: CharacterBase  # 移動中のキャラクター
-var _pending_path: PackedVector3Array  # 実行待ちのパス
-var _pending_character: CharacterBase  # パスを実行するキャラクター
 
 
 func _ready() -> void:
@@ -62,26 +57,15 @@ func _ready() -> void:
 	# インタラクションマネージャーをセットアップ
 	_setup_interaction_manager()
 
-	# 移動マーカーをセットアップ
-	_setup_movement_marker()
-
 	# シグナル接続
 	path_drawer.drawing_started.connect(_on_drawing_started)
 	path_drawer.drawing_updated.connect(_on_drawing_updated)
 	path_drawer.drawing_finished.connect(_on_drawing_finished)
+	path_drawer.path_execution_completed.connect(_on_path_execution_completed)
 	clear_button.pressed.connect(_on_clear_pressed)
 	execute_button.pressed.connect(_on_execute_pressed)
 
-	# キャラクターの移動完了シグナルを接続
-	if character:
-		character.path_completed.connect(_on_path_completed)
-
 	print("[TestPathDrawer] Ready - Click character, select 'Move' from menu")
-
-
-func _setup_movement_marker() -> void:
-	_movement_marker = MovementMarkerScript.new()
-	add_child(_movement_marker)
 
 
 func _setup_selection_system() -> void:
@@ -150,55 +134,27 @@ func _on_drawing_finished(points: PackedVector3Array) -> void:
 	# パス描画を無効化
 	path_drawer.disable()
 
-	# パスを保存して実行ボタンを有効化
-	if points.size() >= 2 and _selected_character:
-		_pending_path = points
-		_pending_character = _selected_character as CharacterBase
+	# 実行ボタンを有効化（PathDrawerが保留パスを保持している）
+	if path_drawer.has_pending_path():
 		execute_button.disabled = false
 		print("[TestPathDrawer] Path ready - press Execute to start")
 
 
 func _on_clear_pressed() -> void:
 	path_drawer.clear()
+	path_drawer.clear_pending()
 	point_count_label.text = "Points: 0"
-	_pending_path = PackedVector3Array()
-	_pending_character = null
 	execute_button.disabled = true
 	print("[TestPathDrawer] Path cleared")
 
 
 func _on_execute_pressed() -> void:
-	if _pending_path.size() < 2 or _pending_character == null:
-		return
-
-	# パスに沿って移動開始
-	var path_array: Array[Vector3] = []
-	for point in _pending_path:
-		path_array.append(point)
-	_pending_character.set_path(path_array, false)  # 歩き移動
-	_moving_character = _pending_character
-
-	# マーカーを表示
-	_movement_marker.show_marker()
-
-	# 実行ボタンを無効化
-	execute_button.disabled = true
-	_pending_path = PackedVector3Array()
-	_pending_character = null
-
-	print("[TestPathDrawer] Movement started")
+	# PathDrawerのexecute()を呼び出し（移動開始）
+	if path_drawer.execute(false):  # 歩き移動
+		execute_button.disabled = true
+		print("[TestPathDrawer] Movement started")
 
 
-func _on_path_completed() -> void:
-	# 移動完了時にマーカーを非表示
-	_movement_marker.hide_marker()
-	_moving_character = null
-	# パスをクリア
-	path_drawer.clear()
+func _on_path_execution_completed(_completed_character: CharacterBody3D) -> void:
+	# 移動完了時の処理
 	print("[TestPathDrawer] Movement completed")
-
-
-func _process(_delta: float) -> void:
-	# 移動中のキャラクターがいればマーカー位置を更新
-	if _moving_character and _movement_marker:
-		_movement_marker.update_position(_moving_character.global_position)

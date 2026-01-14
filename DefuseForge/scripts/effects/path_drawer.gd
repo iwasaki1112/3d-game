@@ -2,11 +2,13 @@ class_name PathDrawer
 extends Node3D
 
 ## 地面にパスを描画するコンポーネント
-## マウスドラッグでパスを描き、将来キャラクター移動に使用
+## マウスドラッグでパスを描き、キャラクター移動に使用
 
 signal drawing_started()
 signal drawing_updated(points: PackedVector3Array)
 signal drawing_finished(points: PackedVector3Array)
+signal path_execution_started(character: CharacterBody3D)
+signal path_execution_completed(character: CharacterBody3D)
 
 @export var min_point_distance: float = 0.2  # ポイント間の最小距離
 @export var line_color: Color = Color(1.0, 1.0, 1.0, 0.9)  # 白
@@ -23,6 +25,11 @@ var _is_drawing: bool = false
 var _is_enabled: bool = false  # パス描画が有効かどうか
 var _path_points: PackedVector3Array = PackedVector3Array()
 var _path_mesh: MeshInstance3D
+
+## パス実行管理
+var _pending_path: PackedVector3Array = PackedVector3Array()
+var _pending_character: CharacterBody3D = null
+var _executing_character: CharacterBody3D = null
 
 
 func _ready() -> void:
@@ -111,6 +118,12 @@ func _add_point(pos: Vector3) -> void:
 ## 描画終了
 func _finish_drawing() -> void:
 	_is_drawing = false
+
+	# パスを保存
+	if _path_points.size() >= 2 and _character:
+		_pending_path = _path_points.duplicate()
+		_pending_character = _character as CharacterBody3D
+
 	drawing_finished.emit(_path_points)
 	print("[PathDrawer] Drawing finished with %d points" % _path_points.size())
 
@@ -157,3 +170,63 @@ func disable() -> void:
 ## 有効かどうか
 func is_enabled() -> bool:
 	return _is_enabled
+
+
+## ========================================
+## パス実行 API
+## ========================================
+
+## 保存されたパスを実行（キャラクター移動開始）
+## @param run: 走るかどうか
+## @return: 実行開始できたらtrue
+func execute(run: bool = false) -> bool:
+	if _pending_path.size() < 2 or _pending_character == null:
+		return false
+
+	# パスに沿って移動開始
+	var path_array: Array[Vector3] = []
+	for point in _pending_path:
+		path_array.append(point)
+	_pending_character.set_path(path_array, run)
+
+	# 実行中キャラクターを記録
+	_executing_character = _pending_character
+
+	# path_completedシグナルを接続
+	if not _executing_character.path_completed.is_connected(_on_path_completed):
+		_executing_character.path_completed.connect(_on_path_completed)
+
+	path_execution_started.emit(_executing_character)
+
+	# 保留パスをクリア
+	_pending_path.clear()
+	_pending_character = null
+
+	print("[PathDrawer] Path execution started")
+	return true
+
+
+## 保留中のパスがあるか
+func has_pending_path() -> bool:
+	return _pending_path.size() >= 2 and _pending_character != null
+
+
+## 保留中のパスをクリア
+func clear_pending() -> void:
+	_pending_path.clear()
+	_pending_character = null
+
+
+## パス完了時のコールバック
+func _on_path_completed() -> void:
+	if _executing_character:
+		# シグナルを切断
+		if _executing_character.path_completed.is_connected(_on_path_completed):
+			_executing_character.path_completed.disconnect(_on_path_completed)
+
+		path_execution_completed.emit(_executing_character)
+		_executing_character = null
+
+	# パス描画をクリア
+	clear()
+	print("[PathDrawer] Path execution completed")
