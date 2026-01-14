@@ -107,15 +107,25 @@ func _ready() -> void:
 	# Create UI layout
 	_create_ui_layout()
 
-	# 複数キャラクターを配列に追加
+	# 複数キャラクターを配列に追加（味方2体、敵2体）
 	var char1 = get_node_or_null("CharacterBody") as CharacterBase
 	var char2 = get_node_or_null("CharacterBody2") as CharacterBase
+	var char3 = get_node_or_null("CharacterBody3") as CharacterBase
+	var char4 = get_node_or_null("CharacterBody4") as CharacterBase
+	# 味方チーム
 	if char1:
 		characters.append(char1)
 		char1.team = CharacterBase.Team.PLAYER
 	if char2:
 		characters.append(char2)
-		char2.team = CharacterBase.Team.ENEMY
+		char2.team = CharacterBase.Team.PLAYER
+	# 敵チーム
+	if char3:
+		characters.append(char3)
+		char3.team = CharacterBase.Team.ENEMY
+	if char4:
+		characters.append(char4)
+		char4.team = CharacterBase.Team.ENEMY
 
 	# デフォルトは1体目を操作
 	if characters.size() > 0:
@@ -159,24 +169,27 @@ func _ready() -> void:
 	for character in characters:
 		character.setup_outline_camera(camera)
 
-	# 2体目（敵）のアニメーションをセットアップ（phantomはvanguardからコピー）
-	print("[AnimViewer] Setting up animations for %d enemy characters" % (characters.size() - 1))
-	for i in range(1, characters.size()):
-		print("[AnimViewer] Calling setup_animations for character %d: %s" % [i, characters[i].name])
-		CharacterAPIScript.setup_animations(characters[i], "phantom")
+	# phantomモデル（敵キャラ）のアニメーションをセットアップ（vanguardからコピー）
+	print("[AnimViewer] Setting up animations for enemy characters")
+	for i in range(characters.size()):
+		var character = characters[i]
+		if character.team == CharacterBase.Team.ENEMY:
+			print("[AnimViewer] Calling setup_animations for character %d: %s" % [i, character.name])
+			CharacterAPIScript.setup_animations(character, "phantom")
 
-	# 2体目にも武器を装備してIKオフセットを適用（Vanguardのまま）
+	# 全キャラクターに武器を装備してIKオフセットを適用（1体目以外）
 	for i in range(1, characters.size()):
-		characters[i].set_weapon(_weapon_id_string_to_int(current_weapon_id))
-		CharacterAPIScript.apply_character_ik_from_resource(characters[i], "vanguard")
+		var character = characters[i]
+		character.set_weapon(_weapon_id_string_to_int(current_weapon_id))
+		CharacterAPIScript.apply_character_ik_from_resource(character, "vanguard")
 		# 武器タイプに合わせてアニメーションを更新
-		if characters[i].animation and characters[i].weapon and characters[i].weapon.weapon_resource:
-			characters[i].animation.set_weapon_type(characters[i].weapon.weapon_resource.weapon_type)
-		# 敵にもidleアニメーションを再生させる
-		if characters[i].animation:
-			characters[i].animation.set_locomotion(0)  # IDLE
+		if character.animation and character.weapon and character.weapon.weapon_resource:
+			character.animation.set_weapon_type(character.weapon.weapon_resource.weapon_type)
+		# idleアニメーションを再生
+		if character.animation:
+			character.animation.set_locomotion(0)  # IDLE
 
-	# 2体目のIK値も更新（1フレーム待ってから）
+	# 全キャラクターのIK値を更新（1フレーム待ってから）
 	await get_tree().process_frame
 	for i in range(1, characters.size()):
 		CharacterAPIScript.update_elbow_pole_position(characters[i], elbow_pole_x, elbow_pole_y, elbow_pole_z)
