@@ -243,6 +243,7 @@ func _setup_animation_tree(model: Node3D) -> void:
 
 	# 有効化
 	anim_tree.active = true
+	print("[AnimComp] AnimationTree activated for model, weapon_type=%d" % weapon_type)
 
 
 ## 上半身ボーンフィルターを設定
@@ -285,6 +286,7 @@ func _update_locomotion_animation() -> void:
 	var idle_name = _get_locomotion_anim_name(LocomotionState.IDLE)
 	var walk_name = _get_locomotion_anim_name(LocomotionState.WALK)
 	var run_name = _get_locomotion_anim_name(LocomotionState.RUN)
+	print("[AnimComp] _update_locomotion_animation: idle=%s, walk=%s, run=%s, weapon_type=%d" % [idle_name, walk_name, run_name, weapon_type])
 
 	# 各ノードにアニメーションを設定
 	var idle_node = _blend_tree.get_node("locomotion_idle") as AnimationNodeAnimation
@@ -308,6 +310,7 @@ func _update_locomotion_animation() -> void:
 			transition_name = "run"
 
 	anim_tree.set("parameters/locomotion_transition/transition_request", transition_name)
+	print("[AnimComp] Set transition_request: %s" % transition_name)
 
 
 ## 移動状態に応じたアニメーション名を取得（フォールバック付き）

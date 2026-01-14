@@ -90,6 +90,9 @@ func _physics_process(delta: float) -> void:
 	# 自動照準更新
 	_update_auto_aim()
 
+	# 敵の可視性を更新（プレイヤーの視界内にいるときのみ表示）
+	update_enemy_visibility()
+
 	move_and_slide()
 
 
@@ -620,6 +623,37 @@ func get_vision_polygon() -> PackedVector3Array:
 ## 壁ヒットポイントを取得
 func get_wall_hit_points() -> PackedVector3Array:
 	return vision.get_wall_hit_points() if vision else PackedVector3Array()
+
+
+## ========================================
+## 敵視認性 API
+## ========================================
+
+## 対象がプレイヤーチームの誰かの視界内にいるかチェック
+## @param target: チェック対象のキャラクター
+## @return: 誰かの視界内ならtrue
+static func is_visible_to_player_team(target: CharacterBase) -> bool:
+	if target == null or not target.is_alive:
+		return false
+
+	var all_characters = target.get_tree().get_nodes_in_group("characters")
+	for node in all_characters:
+		var character = node as CharacterBase
+		if character == null or character == target:
+			continue
+		if character.team != Team.PLAYER or not character.is_alive:
+			continue
+		if character._is_in_field_of_view(target):
+			return true
+	return false
+
+
+## 敵キャラクターの可視性を更新（敵のみ対象）
+func update_enemy_visibility() -> void:
+	if team != Team.ENEMY:
+		return
+	if model:
+		model.visible = CharacterBase.is_visible_to_player_team(self)
 
 
 ## ========================================

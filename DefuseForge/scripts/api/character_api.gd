@@ -261,6 +261,12 @@ static func copy_animations_from(character: CharacterBase, source_character_id: 
 
 	print("[CharacterAPI] Copied %d animations" % copied_count)
 
+	# Debug: Print skeleton bone names to verify rig compatibility
+	if character.skeleton:
+		print("[CharacterAPI] Target skeleton bones (first 10 of %d):" % character.skeleton.get_bone_count())
+		for i in range(mini(10, character.skeleton.get_bone_count())):
+			print("[CharacterAPI]   Bone %d: %s" % [i, character.skeleton.get_bone_name(i)])
+
 	# ソースインスタンスをクリーンアップ
 	source_instance.queue_free()
 
@@ -274,17 +280,24 @@ static func copy_animations_from(character: CharacterBase, source_character_id: 
 ## @param character: 対象キャラクター
 ## @param character_id: キャラクターID
 static func setup_animations(character: CharacterBase, character_id: String) -> void:
+	print("[CharacterAPI] setup_animations called for: %s (character_id=%s)" % [character.name if character else "null", character_id])
 	if character == null:
 		return
 
 	# 現在のアニメーションを確認
 	var anims := get_available_animations(character, false)
+	print("[CharacterAPI] Available animations: %d" % anims.size())
 
 	# アニメーションがない場合、共有元からコピー
 	if anims.is_empty():
 		var source_id := get_animation_source(character_id)
+		print("[CharacterAPI] Source ID for %s: %s" % [character_id, source_id])
 		if not source_id.is_empty():
 			copy_animations_from(character, source_id)
+		else:
+			print("[CharacterAPI] No source ID found for: %s" % character_id)
+	else:
+		print("[CharacterAPI] Animations already exist, skipping copy")
 
 
 # ======================

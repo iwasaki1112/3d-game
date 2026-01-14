@@ -159,10 +159,22 @@ func _ready() -> void:
 	for character in characters:
 		character.setup_outline_camera(camera)
 
+	# 2体目（敵）のアニメーションをセットアップ（phantomはvanguardからコピー）
+	print("[AnimViewer] Setting up animations for %d enemy characters" % (characters.size() - 1))
+	for i in range(1, characters.size()):
+		print("[AnimViewer] Calling setup_animations for character %d: %s" % [i, characters[i].name])
+		CharacterAPIScript.setup_animations(characters[i], "phantom")
+
 	# 2体目にも武器を装備してIKオフセットを適用（Vanguardのまま）
 	for i in range(1, characters.size()):
 		characters[i].set_weapon(_weapon_id_string_to_int(current_weapon_id))
 		CharacterAPIScript.apply_character_ik_from_resource(characters[i], "vanguard")
+		# 武器タイプに合わせてアニメーションを更新
+		if characters[i].animation and characters[i].weapon and characters[i].weapon.weapon_resource:
+			characters[i].animation.set_weapon_type(characters[i].weapon.weapon_resource.weapon_type)
+		# 敵にもidleアニメーションを再生させる
+		if characters[i].animation:
+			characters[i].animation.set_locomotion(0)  # IDLE
 
 	# 2体目のIK値も更新（1フレーム待ってから）
 	await get_tree().process_frame
@@ -251,10 +263,10 @@ func _setup_fog_of_war() -> void:
 	fog_of_war_system.name = "FogOfWarSystem"
 	add_child(fog_of_war_system)
 
-	# すべてのキャラクターの視界を登録
+	# プレイヤーチームのキャラクターのみ視界を登録（敵はFoGに表示しない）
 	await get_tree().process_frame
 	for character in characters:
-		if character and character.vision:
+		if character and character.vision and character.team == CharacterBase.Team.PLAYER:
 			fog_of_war_system.register_vision(character.vision)
 
 
