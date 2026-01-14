@@ -6,7 +6,8 @@ extends Node
 
 signal rotation_started()
 signal rotation_ended()
-signal clicked()  ## Emitted on short click (not long-press)
+signal clicked()  ## Emitted on short click (not long-press) on character
+signal clicked_empty()  ## Emitted on short click on empty area (not on character)
 
 ## Proximity check radius for click detection (fallback when raycast misses)
 @export var click_radius: float = 0.3
@@ -21,6 +22,7 @@ var _character: CharacterBody3D
 var _camera: Camera3D
 var _is_rotating: bool = false
 var _is_holding: bool = false
+var _is_any_click_started: bool = false
 var _hold_timer: float = 0.0
 var _hold_mouse_pos: Vector2
 var _ground_plane: Plane
@@ -55,14 +57,20 @@ func _unhandled_input(event: InputEvent) -> void:
 		var mouse_event = event as InputEventMouseButton
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
 			if mouse_event.pressed:
+				_is_any_click_started = true
 				if _is_clicking_on_character(mouse_event.position):
 					_is_holding = true
 					_hold_timer = 0.0
 					_hold_mouse_pos = mouse_event.position
 			else:
-				if _is_holding and not _is_rotating:
-					# Short click - not long-press for rotation
-					clicked.emit()
+				if _is_any_click_started:
+					if _is_holding and not _is_rotating:
+						# Short click on character - not long-press for rotation
+						clicked.emit()
+					elif not _is_holding:
+						# Short click on empty area
+						clicked_empty.emit()
+				_is_any_click_started = false
 				_is_holding = false
 				_hold_timer = 0.0
 				if _is_rotating:

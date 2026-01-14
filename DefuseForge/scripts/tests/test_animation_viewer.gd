@@ -4,6 +4,7 @@ extends Node3D
 
 const CharacterAPIScript = preload("res://scripts/api/character_api.gd")
 const FogOfWarSystemScript = preload("res://scripts/systems/fog_of_war_system.gd")
+const SelectionManagerScript = preload("res://scripts/managers/selection_manager.gd")
 
 @onready var camera: Camera3D = $OrbitCamera
 @onready var character_body: CharacterBase = $CharacterBody
@@ -74,6 +75,10 @@ var wall_shader_material: ShaderMaterial = null
 const InputRotationComponentScript = preload("res://scripts/characters/components/input_rotation_component.gd")
 var _input_rotation: Node
 
+# Selection management
+var _selection_manager: Node
+var _highlight_checkbox: CheckButton
+
 
 func _weapon_id_string_to_int(weapon_id: String) -> int:
 	match weapon_id.to_lower():
@@ -131,6 +136,12 @@ func _ready() -> void:
 	if character_body:
 		character_body.setup_outline_camera(camera)
 
+	# Setup selection manager
+	_selection_manager = SelectionManagerScript.new()
+	_selection_manager.name = "SelectionManager"
+	add_child(_selection_manager)
+	_selection_manager.selection_changed.connect(_on_selection_changed)
+
 	# Setup input rotation component
 	_setup_input_rotation()
 
@@ -151,6 +162,7 @@ func _setup_input_rotation() -> void:
 	_input_rotation.rotation_started.connect(func(): camera.input_disabled = true)
 	_input_rotation.rotation_ended.connect(func(): camera.input_disabled = false)
 	_input_rotation.clicked.connect(_on_character_clicked)
+	_input_rotation.clicked_empty.connect(_on_empty_clicked)
 
 
 func _setup_fog_of_war() -> void:
@@ -474,10 +486,10 @@ func _populate_left_panel() -> void:
 	select_label.text = "Selection"
 	vbox.add_child(select_label)
 
-	var select_btn = CheckButton.new()
-	select_btn.text = "Highlight"
-	select_btn.toggled.connect(_on_selection_toggled)
-	vbox.add_child(select_btn)
+	_highlight_checkbox = CheckButton.new()
+	_highlight_checkbox.text = "Highlight"
+	_highlight_checkbox.toggled.connect(_on_selection_toggled)
+	vbox.add_child(_highlight_checkbox)
 
 
 func _populate_right_panel() -> void:
@@ -986,16 +998,26 @@ func _on_camera_top() -> void:
 
 
 func _on_selection_toggled(toggled_on: bool) -> void:
-	if character_body:
-		character_body.set_selected(toggled_on)
-		print("[AnimViewer] Selection highlight: %s" % toggled_on)
+	if toggled_on:
+		_selection_manager.select(character_body)
+	else:
+		_selection_manager.deselect()
 
 
 func _on_character_clicked() -> void:
 	if character_body:
-		var new_state = not character_body.is_selected()
-		character_body.set_selected(new_state)
-		print("[AnimViewer] Character clicked - selected: %s" % new_state)
+		_selection_manager.select(character_body)
+		print("[AnimViewer] Character selected")
+
+
+func _on_empty_clicked() -> void:
+	_selection_manager.deselect()
+	print("[AnimViewer] Selection cleared")
+
+
+func _on_selection_changed(character: CharacterBody3D) -> void:
+	if _highlight_checkbox:
+		_highlight_checkbox.set_pressed_no_signal(character != null)
 
 
 func _toggle_laser() -> void:
