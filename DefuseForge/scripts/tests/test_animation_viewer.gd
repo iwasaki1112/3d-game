@@ -15,10 +15,7 @@ const ContextMenuItemScript = preload("res://scripts/resources/context_menu_item
 
 var _animations: Array[String] = []
 const GRAVITY: float = 9.8
-const DEFAULT_BLEND_TIME: float = 0.3
 const MOVE_SPEED: float = 5.0  # 移動速度
-var blend_time: float = DEFAULT_BLEND_TIME
-var blend_time_label: Label = null
 
 # UI Panels
 var left_panel: PanelContainer = null
@@ -463,63 +460,6 @@ func _populate_left_panel() -> void:
 
 	vbox.add_child(HSeparator.new())
 
-	# Playback controls
-	var stop_btn = Button.new()
-	stop_btn.text = "Stop"
-	stop_btn.pressed.connect(_on_stop_pressed)
-	vbox.add_child(stop_btn)
-
-	var pause_btn = Button.new()
-	pause_btn.text = "Pause/Resume"
-	pause_btn.pressed.connect(_on_pause_pressed)
-	vbox.add_child(pause_btn)
-
-	vbox.add_child(HSeparator.new())
-
-	# Camera view buttons
-	var camera_label = Label.new()
-	camera_label.text = "Camera View"
-	vbox.add_child(camera_label)
-
-	var camera_hbox1 = HBoxContainer.new()
-	camera_hbox1.add_theme_constant_override("separation", 4)
-	vbox.add_child(camera_hbox1)
-
-	var front_btn = Button.new()
-	front_btn.text = "Front"
-	front_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	front_btn.pressed.connect(_on_camera_front)
-	camera_hbox1.add_child(front_btn)
-
-	var back_btn = Button.new()
-	back_btn.text = "Back"
-	back_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	back_btn.pressed.connect(_on_camera_back)
-	camera_hbox1.add_child(back_btn)
-
-	var camera_hbox2 = HBoxContainer.new()
-	camera_hbox2.add_theme_constant_override("separation", 4)
-	vbox.add_child(camera_hbox2)
-
-	var left_btn = Button.new()
-	left_btn.text = "Left"
-	left_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	left_btn.pressed.connect(_on_camera_left)
-	camera_hbox2.add_child(left_btn)
-
-	var right_btn = Button.new()
-	right_btn.text = "Right"
-	right_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	right_btn.pressed.connect(_on_camera_right)
-	camera_hbox2.add_child(right_btn)
-
-	var top_btn = Button.new()
-	top_btn.text = "Top"
-	top_btn.pressed.connect(_on_camera_top)
-	vbox.add_child(top_btn)
-
-	vbox.add_child(HSeparator.new())
-
 	# Selection highlight
 	var select_label = Label.new()
 	select_label.text = "Selection"
@@ -583,28 +523,6 @@ func _populate_bottom_panel() -> void:
 
 	for child in hbox.get_children():
 		child.queue_free()
-
-	# Playback section
-	var left_section = VBoxContainer.new()
-	left_section.add_theme_constant_override("separation", 4)
-	hbox.add_child(left_section)
-
-	var blend_label = Label.new()
-	blend_label.text = "Blend Time"
-	left_section.add_child(blend_label)
-
-	blend_time_label = Label.new()
-	blend_time_label.text = "%.2f sec" % blend_time
-	left_section.add_child(blend_time_label)
-
-	var blend_slider = HSlider.new()
-	blend_slider.min_value = 0.0
-	blend_slider.max_value = 1.0
-	blend_slider.step = 0.05
-	blend_slider.value = blend_time
-	blend_slider.custom_minimum_size.x = 150
-	blend_slider.value_changed.connect(_on_blend_time_changed)
-	left_section.add_child(blend_slider)
 
 	# Upper body rotation
 	var rotation_section = VBoxContainer.new()
@@ -884,28 +802,12 @@ func _change_weapon(weapon_id: String) -> void:
 
 
 func _play_animation(anim_name: String) -> void:
-	CharacterAPIScript.play_animation(character_body, anim_name, blend_time)
+	CharacterAPIScript.play_animation(character_body, anim_name, 0.3)
 	print("[AnimViewer] Playing: %s" % anim_name)
 
 
 func _on_animation_button_pressed(anim_name: String) -> void:
 	_play_animation(anim_name)
-
-
-func _on_stop_pressed() -> void:
-	# Animation stop is handled via the play_animation API
-	pass
-
-
-func _on_pause_pressed() -> void:
-	# TODO: implement pause/resume via animation component
-	pass
-
-
-func _on_blend_time_changed(value: float) -> void:
-	blend_time = value
-	if blend_time_label:
-		blend_time_label.text = "%.2f sec" % blend_time
 
 
 func _on_upper_body_rotation_changed(value: float) -> void:
@@ -1001,32 +903,6 @@ func _load_character_resource(character_id: String) -> void:
 
 func _apply_character_ik_offset() -> void:
 	CharacterAPIScript.apply_character_ik_from_resource(character_body, current_character_id)
-
-
-# Camera view callbacks
-func _on_camera_front() -> void:
-	if camera:
-		camera.set_front_view()
-
-
-func _on_camera_back() -> void:
-	if camera:
-		camera.set_back_view()
-
-
-func _on_camera_left() -> void:
-	if camera:
-		camera.set_left_view()
-
-
-func _on_camera_right() -> void:
-	if camera:
-		camera.set_right_view()
-
-
-func _on_camera_top() -> void:
-	if camera:
-		camera.set_top_view()
 
 
 func _on_selection_toggled(toggled_on: bool) -> void:
