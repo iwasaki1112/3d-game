@@ -851,18 +851,18 @@ func get_animation_name(base_name: String) -> String:
     return "%s_%s" % [weapon_name, base_name]
 ```
 
-**テストシーン作成時の注意:**
+**デフォルト設定:**
 
-デフォルトの`weapon_type`は`0`（NONE）のため、`none_idle`等を探してしまい、Tポーズのままになる。キャラクターモデルのアニメーションが`rifle_*`形式の場合は`weapon_type`を設定する必要がある。
+`weapon_type`のデフォルトは`2`（PISTOL）。武器を持っていない状態でも`pistol_idle`アニメーションが再生される。
 
 ```gdscript
-# 正しい例: weapon_typeを設定してからlocomotionを設定
+# デフォルトでpistol_idleが再生される
 if character.animation:
-    character.animation.set_weapon_type(1)  # RIFLE
-    character.animation.set_locomotion(0)   # IDLE
+    character.animation.anim_tree.active = true
+    character.animation.set_locomotion(0)  # IDLE → pistol_idle
 
-# または武器を装備すると自動設定される
-character.set_weapon(WeaponRegistry.WeaponId.AK47)
+# ライフル装備時は自動でrifle_*に切り替わる
+character.set_weapon(WeaponRegistry.WeaponId.AK47)  # → rifle_idle
 ```
 
 ## チーム

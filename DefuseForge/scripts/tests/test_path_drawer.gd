@@ -39,14 +39,10 @@ func _ready() -> void:
 	# アウトラインカメラをセットアップ
 	if character:
 		character.setup_outline_camera(camera)
-		# アニメーション設定
+		# Idleアニメーションを再生（デフォルトはpistol_idle）
 		if character.animation:
-			var anim = character.animation
-			# 武器タイプをrifleに設定（アニメーション名がrifle_idleなど）
-			anim.set_weapon_type(1)  # 1 = RIFLE
-			# AnimationTreeを有効化
-			anim.anim_tree.active = true
-			anim.set_locomotion(0)  # IDLE
+			character.animation.anim_tree.active = true
+			character.animation.set_locomotion(0)  # IDLE
 
 	# 選択システムをセットアップ
 	_setup_selection_system()
