@@ -20,6 +20,7 @@ var _camera: Camera3D
 var _character: Node3D
 var _ground_plane: Plane
 var _is_drawing: bool = false
+var _is_enabled: bool = false  # パス描画が有効かどうか
 var _path_points: PackedVector3Array = PackedVector3Array()
 var _path_mesh: MeshInstance3D
 
@@ -44,7 +45,7 @@ func setup(camera: Camera3D, character: Node3D = null) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _camera == null:
+	if _camera == null or not _is_enabled:
 		return
 
 	if event is InputEventMouseButton:
@@ -136,3 +137,23 @@ func set_line_color(color: Color) -> void:
 	line_color = color
 	if _path_mesh:
 		_path_mesh.set_line_color(color)
+
+
+## パス描画を有効化（キャラクターを指定）
+func enable(character: Node3D) -> void:
+	_character = character
+	_is_enabled = true
+	clear()
+	print("[PathDrawer] Enabled for character")
+
+
+## パス描画を無効化
+func disable() -> void:
+	_is_enabled = false
+	_is_drawing = false
+	print("[PathDrawer] Disabled")
+
+
+## 有効かどうか
+func is_enabled() -> bool:
+	return _is_enabled

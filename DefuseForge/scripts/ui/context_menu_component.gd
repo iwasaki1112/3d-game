@@ -9,6 +9,16 @@ signal menu_opened(character: CharacterBody3D)
 signal menu_closed()
 signal item_selected(action_id: String, character: CharacterBody3D)
 
+const ContextMenuItemScript = preload("res://scripts/resources/context_menu_item.gd")
+
+## 標準メニュー項目の定義
+## 各テストシーンで同じ項目を使用するために一元管理
+const DEFAULT_MENU_ITEMS: Array[Dictionary] = [
+	{"id": "move", "name": "移動", "order": 0},
+	{"id": "rotate", "name": "回転", "order": 1},
+	{"id": "control", "name": "操作", "order": 2},
+]
+
 @export_group("外観設定")
 @export var button_size: Vector2 = Vector2(120, 50)  ## ボタンサイズ（モバイル向け大きめ）
 @export var button_margin: float = 4.0  ## ボタン間のマージン
@@ -152,6 +162,15 @@ func set_item_enabled(action_id: String, enabled: bool) -> void:
 ## 全メニュー項目をクリア
 func clear_items() -> void:
 	_items.clear()
+
+
+## 標準メニュー項目をセットアップ
+## どこから呼び出しても同じ項目が追加される
+func setup_default_items() -> void:
+	clear_items()
+	for item_data in DEFAULT_MENU_ITEMS:
+		var item = ContextMenuItemScript.create(item_data["id"], item_data["name"], item_data["order"])
+		add_item(item)
 
 
 ## メニューが開いているか

@@ -834,6 +834,37 @@ var list: PackedStringArray = character.get_animation_list()
 
 遷移は `locomotion_changed` シグナル経由で自動発火するため、WASD入力・ドロワーパス移動の両方で同じクロスフェードが適用される。
 
+### 重要: weapon_type とアニメーション名
+
+アニメーション名は `{weapon_type}_{base_name}` 形式で構成される。
+
+| weapon_type | 値 | アニメーション名例 |
+|-------------|-----|------------------|
+| NONE | 0 | `none_idle`, `none_walking` |
+| RIFLE | 1 | `rifle_idle`, `rifle_walking` |
+| PISTOL | 2 | `pistol_idle`, `pistol_walking` |
+
+```gdscript
+# AnimationComponent内部
+func get_animation_name(base_name: String) -> String:
+    var weapon_name = WEAPON_TYPE_NAMES.get(weapon_type, "none")
+    return "%s_%s" % [weapon_name, base_name]
+```
+
+**テストシーン作成時の注意:**
+
+デフォルトの`weapon_type`は`0`（NONE）のため、`none_idle`等を探してしまい、Tポーズのままになる。キャラクターモデルのアニメーションが`rifle_*`形式の場合は`weapon_type`を設定する必要がある。
+
+```gdscript
+# 正しい例: weapon_typeを設定してからlocomotionを設定
+if character.animation:
+    character.animation.set_weapon_type(1)  # RIFLE
+    character.animation.set_locomotion(0)   # IDLE
+
+# または武器を装備すると自動設定される
+character.set_weapon(WeaponRegistry.WeaponId.AK47)
+```
+
 ## チーム
 
 キャラクターのチーム所属とチーム判定。射撃時のダメージ判定に使用。
@@ -914,6 +945,32 @@ PlayerManagerを参照しているシステム:
 | CharacterInteractionManager | 敵チーム選択ブロック |
 | FogOfWarSystem | プレイヤーチームのみ視界登録 |
 | テストシーン | 操作対象キャラクター決定 |
+
+### 重要: 敵キャラクターの自動非表示
+
+`CharacterBase._physics_process()`で`update_enemy_visibility()`が毎フレーム呼ばれ、敵チームのキャラクターは**プレイヤーチームの誰かの視界内にいない限り自動的に非表示**になる。
+
+```gdscript
+# CharacterBase内部処理
+func update_enemy_visibility() -> void:
+    if not PlayerManager.is_enemy_team(team):
+        return  # プレイヤーチームは常に表示
+    if model:
+        model.visible = CharacterBase.is_visible_to_player_team(self)
+```
+
+**テストシーン作成時の注意:**
+- 単一キャラクターのみのテストシーンでは、`team`をプレイヤーチームに合わせること
+- デフォルトのプレイヤーチームは`TERRORIST`（team = 2）
+- 敵チーム（team = 1）のキャラクターのみ配置すると、視界システムにより非表示になる
+
+```gdscript
+# 正しい例: プレイヤーチームに合わせる
+character.team = CharacterBase.Team.TERRORIST  # team = 2
+
+# 間違い: 敵チームだと非表示になる可能性
+character.team = CharacterBase.Team.COUNTER_TERRORIST  # team = 1
+```
 
 ### 関連ファイル
 
