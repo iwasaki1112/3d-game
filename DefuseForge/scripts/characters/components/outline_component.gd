@@ -159,6 +159,9 @@ func _apply_outline() -> void:
 		print("[OutlineComponent] ERROR: materials not ready")
 		return
 
+	# カメラを同期してから表示（チラつき防止）
+	_sync_camera()
+
 	# キャラクターのメッシュをマスクレイヤーに複製
 	_create_mask_meshes()
 

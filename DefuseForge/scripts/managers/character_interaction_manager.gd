@@ -111,7 +111,9 @@ func _on_empty_clicked() -> void:
 	match _state:
 		InteractionState.MENU_OPEN:
 			_context_menu.close()
-			# メニューを閉じるだけで選択は維持
+			# 選択も解除
+			if _selection_manager:
+				_selection_manager.deselect()
 		InteractionState.ROTATING:
 			# 回転中は何もしない（回転終了を待つ）
 			pass
