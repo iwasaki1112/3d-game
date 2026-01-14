@@ -17,8 +17,11 @@ signal clicked_empty()  ## Emitted on short click on empty area (not on characte
 @export var ground_plane_height: float = 0.0
 ## Hold duration before rotation starts (seconds)
 @export var hold_duration: float = 0.2
+## If true, rotation requires menu activation (disables long-press auto-rotation)
+@export var require_menu_activation: bool = false
 
 var _character: CharacterBody3D
+var _external_rotation_mode: bool = false  ## External control for rotation mode
 var _camera: Camera3D
 var _is_rotating: bool = false
 var _is_holding: bool = false
@@ -42,6 +45,14 @@ func setup(camera: Camera3D) -> void:
 
 
 func _process(delta: float) -> void:
+	# External rotation mode is handled via tap-to-rotate in _unhandled_input
+	if _external_rotation_mode:
+		return
+
+	# Long-press rotation (only if menu activation is not required)
+	if require_menu_activation:
+		return
+
 	if _is_holding and not _is_rotating and not _rotation_blocked:
 		_hold_timer += delta
 		if _hold_timer >= hold_duration:
@@ -64,12 +75,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
 			if mouse_event.pressed:
 				_is_any_click_started = true
-				if _is_clicking_on_character(mouse_event.position):
+				if _external_rotation_mode:
+					# External mode: tap to rotate instantly and end rotation mode
+					_rotate_character_to_mouse(mouse_event.position)
+					_external_rotation_mode = false
+					rotation_ended.emit()
+				elif _is_clicking_on_character(mouse_event.position):
 					_is_holding = true
 					_hold_timer = 0.0
 					_hold_mouse_pos = mouse_event.position
 			else:
-				if _is_any_click_started:
+				if _is_any_click_started and not _external_rotation_mode:
 					if _is_holding and not _is_rotating and not _rotation_blocked:
 						# Short click on character - not long-press for rotation
 						clicked.emit()
@@ -77,13 +93,13 @@ func _unhandled_input(event: InputEvent) -> void:
 						# Short click on empty area
 						clicked_empty.emit()
 					# Note: if _rotation_blocked, emit nothing (attempted rotation on unselected)
+					_is_holding = false
+					_hold_timer = 0.0
+					_rotation_blocked = false
+					if _is_rotating:
+						_is_rotating = false
+						rotation_ended.emit()
 				_is_any_click_started = false
-				_is_holding = false
-				_hold_timer = 0.0
-				_rotation_blocked = false
-				if _is_rotating:
-					_is_rotating = false
-					rotation_ended.emit()
 
 	if event is InputEventMouseMotion:
 		if _is_holding:
@@ -139,4 +155,18 @@ func _rotate_character_to_mouse(mouse_pos: Vector2) -> void:
 
 ## Check if currently in rotation mode
 func is_rotating() -> bool:
-	return _is_rotating
+	return _is_rotating or _external_rotation_mode
+
+
+## Start rotation mode externally (from menu)
+func start_rotation_mode() -> void:
+	_external_rotation_mode = true
+	rotation_started.emit()
+
+
+## Stop rotation mode externally
+func stop_rotation_mode() -> void:
+	if _external_rotation_mode:
+		_external_rotation_mode = false
+		_is_holding = false
+		rotation_ended.emit()

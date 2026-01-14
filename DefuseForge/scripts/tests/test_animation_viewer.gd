@@ -5,6 +5,9 @@ extends Node3D
 const CharacterAPIScript = preload("res://scripts/api/character_api.gd")
 const FogOfWarSystemScript = preload("res://scripts/systems/fog_of_war_system.gd")
 const SelectionManagerScript = preload("res://scripts/managers/selection_manager.gd")
+const CharacterInteractionManagerScript = preload("res://scripts/managers/character_interaction_manager.gd")
+const ContextMenuComponentScript = preload("res://scripts/ui/context_menu_component.gd")
+const ContextMenuItemScript = preload("res://scripts/resources/context_menu_item.gd")
 
 @onready var camera: Camera3D = $OrbitCamera
 @onready var character_body: CharacterBase = $CharacterBody
@@ -79,6 +82,10 @@ var _input_rotation: Node
 var _selection_manager: Node
 var _highlight_checkbox: CheckButton
 
+# Context menu and interaction
+var _interaction_manager: Node
+var _context_menu: Control
+
 
 func _weapon_id_string_to_int(weapon_id: String) -> int:
 	match weapon_id.to_lower():
@@ -145,6 +152,12 @@ func _ready() -> void:
 	# Setup input rotation component
 	_setup_input_rotation()
 
+	# Setup context menu
+	_setup_context_menu()
+
+	# Setup interaction manager (coordinates selection, menu, and rotation)
+	_setup_interaction_manager()
+
 	# Play idle animation
 	if _animations.size() > 0:
 		_play_animation(_animations[0])
@@ -159,10 +172,36 @@ func _setup_input_rotation() -> void:
 	_input_rotation.name = "InputRotationComponent"
 	character_body.add_child(_input_rotation)
 	_input_rotation.setup(camera)
-	_input_rotation.rotation_started.connect(func(): camera.input_disabled = true)
-	_input_rotation.rotation_ended.connect(func(): camera.input_disabled = false)
-	_input_rotation.clicked.connect(_on_character_clicked)
-	_input_rotation.clicked_empty.connect(_on_empty_clicked)
+	# Enable menu-based activation (disable long-press auto-rotation)
+	_input_rotation.require_menu_activation = true
+
+
+func _setup_context_menu() -> void:
+	# Create context menu UI
+	_context_menu = ContextMenuComponentScript.new()
+	_context_menu.name = "ContextMenu"
+	canvas_layer.add_child(_context_menu)
+
+	# Add menu items
+	var rotate_item = ContextMenuItemScript.create("rotate", "回転", 0)
+	_context_menu.add_item(rotate_item)
+
+
+func _setup_interaction_manager() -> void:
+	_interaction_manager = CharacterInteractionManagerScript.new()
+	_interaction_manager.name = "CharacterInteractionManager"
+	add_child(_interaction_manager)
+
+	# Setup with all components
+	_interaction_manager.setup(
+		_selection_manager,
+		_context_menu,
+		_input_rotation,
+		camera
+	)
+
+	# Connect state changes for UI updates
+	_interaction_manager.state_changed.connect(_on_interaction_state_changed)
 
 
 func _setup_fog_of_war() -> void:
@@ -1004,20 +1043,21 @@ func _on_selection_toggled(toggled_on: bool) -> void:
 		_selection_manager.deselect()
 
 
-func _on_character_clicked() -> void:
-	if character_body:
-		_selection_manager.select(character_body)
-		print("[AnimViewer] Character selected")
-
-
-func _on_empty_clicked() -> void:
-	_selection_manager.deselect()
-	print("[AnimViewer] Selection cleared")
-
-
 func _on_selection_changed(character: CharacterBody3D) -> void:
 	if _highlight_checkbox:
 		_highlight_checkbox.set_pressed_no_signal(character != null)
+
+
+func _on_interaction_state_changed(_old_state: int, new_state: int) -> void:
+	# CharacterInteractionManager.InteractionState enum values:
+	# 0 = IDLE, 1 = MENU_OPEN, 2 = ROTATING
+	match new_state:
+		0:  # IDLE
+			pass
+		1:  # MENU_OPEN
+			print("[AnimViewer] Context menu opened")
+		2:  # ROTATING
+			print("[AnimViewer] Rotation mode started")
 
 
 func _toggle_laser() -> void:
