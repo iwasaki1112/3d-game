@@ -481,6 +481,7 @@ rifle_idle / rifle_walking / rifle_sprint 自動切り替え
 | run_speed | float | 6.0 | 走行速度 |
 | rotation_speed | float | 10.0 | 回転速度 |
 | waypoint_threshold | float | 0.3 | ウェイポイント到達判定距離 |
+| show_movement_marker | bool | true | 移動時にマーカーを表示するか |
 
 ### シグナル
 
@@ -490,10 +491,146 @@ signal path_completed               # パス移動完了時
 signal locomotion_changed(state: int)  # 移動状態変化時 (0=IDLE, 1=WALK, 2=RUN)
 ```
 
+### 移動マーカー
+
+移動中のキャラクターの足元に白いリングマーカーを表示する機能。パス追従モード使用時に自動で表示・非表示が管理される。
+
+```gdscript
+# MovementComponentエクスポート設定で有効/無効を切り替え
+@export var show_movement_marker: bool = true
+```
+
+**動作:**
+- `set_path()` 呼び出し時に自動表示
+- 移動中は毎フレーム位置を更新
+- `stop()` または `path_completed` 時に自動非表示
+
+**MovementMarkerエクスポート設定:**
+
+| パラメータ | 型 | デフォルト | 説明 |
+|------------|------|------------|------|
+| ring_radius | float | 0.4 | リングの半径 |
+| ring_thickness | float | 0.03 | リングの太さ |
+| ring_color | Color | (1.0, 1.0, 1.0, 0.9) | リングの色（白） |
+| height_offset | float | 0.02 | 地面からの高さ |
+| segments | int | 32 | リングのセグメント数 |
+
 ### 関連ファイル
 
 - `scripts/characters/components/movement_component.gd` - 移動コンポーネント
 - `scripts/characters/components/animation_component.gd` - アニメーション管理
+- `scripts/effects/movement_marker.gd` - 移動マーカー
+
+---
+
+## PathDrawer
+
+地面にパスを描画し、キャラクター移動を実行するコンポーネント。
+
+### 基本使用
+
+```gdscript
+# PathDrawerをセットアップ
+path_drawer.setup(camera)
+
+# キャラクター選択後にパス描画を有効化
+path_drawer.enable(character)
+
+# 描画完了後にパスを実行
+if path_drawer.has_pending_path():
+    path_drawer.execute(false)  # 歩き移動
+    # または
+    path_drawer.execute(true)   # 走り移動
+```
+
+### パス描画API
+
+```gdscript
+# パス描画を有効化（キャラクターを指定）
+path_drawer.enable(character: Node3D)
+
+# パス描画を無効化
+path_drawer.disable()
+
+# パスをクリア
+path_drawer.clear()
+
+# 描画中かどうか
+var drawing: bool = path_drawer.is_drawing()
+
+# 有効かどうか
+var enabled: bool = path_drawer.is_enabled()
+
+# 描画済みパスを取得
+var points: PackedVector3Array = path_drawer.get_drawn_path()
+
+# 線の色を変更
+path_drawer.set_line_color(Color.CYAN)
+```
+
+### パス実行API
+
+```gdscript
+# 保存されたパスを実行（キャラクター移動開始）
+# @param run: 走るかどうか
+# @return: 実行開始できたらtrue
+var success: bool = path_drawer.execute(run: bool = false)
+
+# 保留中のパスがあるか
+var has_path: bool = path_drawer.has_pending_path()
+
+# 保留中のパスをクリア（実行せずに破棄）
+path_drawer.clear_pending()
+```
+
+### シグナル
+
+```gdscript
+# 描画関連
+signal drawing_started()
+signal drawing_updated(points: PackedVector3Array)
+signal drawing_finished(points: PackedVector3Array)
+
+# 実行関連
+signal path_execution_started(character: CharacterBody3D)
+signal path_execution_completed(character: CharacterBody3D)
+```
+
+### エクスポート設定
+
+| パラメータ | 型 | デフォルト | 説明 |
+|------------|------|------------|------|
+| min_point_distance | float | 0.2 | ポイント間の最小距離 |
+| line_color | Color | (1.0, 1.0, 1.0, 0.9) | 線の色（白） |
+| line_width | float | 0.04 | 線の太さ |
+| ground_plane_height | float | 0.0 | 地面の高さ |
+| max_points | int | 500 | 最大ポイント数 |
+
+### 統合例
+
+```gdscript
+# コンテキストメニューと連携した使用例
+func _on_action_started(action_id: String, character: CharacterBody3D) -> void:
+    if action_id == "move":
+        path_drawer.enable(character)
+
+func _on_drawing_finished(points: PackedVector3Array) -> void:
+    path_drawer.disable()
+    if path_drawer.has_pending_path():
+        execute_button.disabled = false
+
+func _on_execute_pressed() -> void:
+    if path_drawer.execute(false):
+        execute_button.disabled = true
+
+func _on_path_execution_completed(character: CharacterBody3D) -> void:
+    print("移動完了: %s" % character.name)
+```
+
+### 関連ファイル
+
+- `scripts/effects/path_drawer.gd` - パス描画・実行管理
+- `scripts/effects/path_line_mesh.gd` - パス線描画（ArrayMesh）
 
 ---
 
@@ -834,6 +971,37 @@ var list: PackedStringArray = character.get_animation_list()
 
 遷移は `locomotion_changed` シグナル経由で自動発火するため、WASD入力・ドロワーパス移動の両方で同じクロスフェードが適用される。
 
+### 重要: weapon_type とアニメーション名
+
+アニメーション名は `{weapon_type}_{base_name}` 形式で構成される。
+
+| weapon_type | 値 | アニメーション名例 |
+|-------------|-----|------------------|
+| NONE | 0 | `none_idle`, `none_walking` |
+| RIFLE | 1 | `rifle_idle`, `rifle_walking` |
+| PISTOL | 2 | `pistol_idle`, `pistol_walking` |
+
+```gdscript
+# AnimationComponent内部
+func get_animation_name(base_name: String) -> String:
+    var weapon_name = WEAPON_TYPE_NAMES.get(weapon_type, "none")
+    return "%s_%s" % [weapon_name, base_name]
+```
+
+**デフォルト設定:**
+
+`weapon_type`のデフォルトは`2`（PISTOL）。武器を持っていない状態でも`pistol_idle`アニメーションが再生される。
+
+```gdscript
+# デフォルトでpistol_idleが再生される
+if character.animation:
+    character.animation.anim_tree.active = true
+    character.animation.set_locomotion(0)  # IDLE → pistol_idle
+
+# ライフル装備時は自動でrifle_*に切り替わる
+character.set_weapon(WeaponRegistry.WeaponId.AK47)  # → rifle_idle
+```
+
 ## チーム
 
 キャラクターのチーム所属とチーム判定。射撃時のダメージ判定に使用。
@@ -914,6 +1082,32 @@ PlayerManagerを参照しているシステム:
 | CharacterInteractionManager | 敵チーム選択ブロック |
 | FogOfWarSystem | プレイヤーチームのみ視界登録 |
 | テストシーン | 操作対象キャラクター決定 |
+
+### 重要: 敵キャラクターの自動非表示
+
+`CharacterBase._physics_process()`で`update_enemy_visibility()`が毎フレーム呼ばれ、敵チームのキャラクターは**プレイヤーチームの誰かの視界内にいない限り自動的に非表示**になる。
+
+```gdscript
+# CharacterBase内部処理
+func update_enemy_visibility() -> void:
+    if not PlayerManager.is_enemy_team(team):
+        return  # プレイヤーチームは常に表示
+    if model:
+        model.visible = CharacterBase.is_visible_to_player_team(self)
+```
+
+**テストシーン作成時の注意:**
+- 単一キャラクターのみのテストシーンでは、`team`をプレイヤーチームに合わせること
+- デフォルトのプレイヤーチームは`TERRORIST`（team = 2）
+- 敵チーム（team = 1）のキャラクターのみ配置すると、視界システムにより非表示になる
+
+```gdscript
+# 正しい例: プレイヤーチームに合わせる
+character.team = CharacterBase.Team.TERRORIST  # team = 2
+
+# 間違い: 敵チームだと非表示になる可能性
+character.team = CharacterBase.Team.COUNTER_TERRORIST  # team = 1
+```
 
 ### 関連ファイル
 

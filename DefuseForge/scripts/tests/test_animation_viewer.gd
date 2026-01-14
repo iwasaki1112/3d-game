@@ -7,7 +7,6 @@ const FogOfWarSystemScript = preload("res://scripts/systems/fog_of_war_system.gd
 const SelectionManagerScript = preload("res://scripts/managers/selection_manager.gd")
 const CharacterInteractionManagerScript = preload("res://scripts/managers/character_interaction_manager.gd")
 const ContextMenuComponentScript = preload("res://scripts/ui/context_menu_component.gd")
-const ContextMenuItemScript = preload("res://scripts/resources/context_menu_item.gd")
 
 @onready var camera: Camera3D = $OrbitCamera
 @onready var canvas_layer: CanvasLayer = $CanvasLayer
@@ -238,11 +237,8 @@ func _setup_context_menu() -> void:
 	_context_menu.name = "ContextMenu"
 	canvas_layer.add_child(_context_menu)
 
-	# Add menu items
-	var rotate_item = ContextMenuItemScript.create("rotate", "回転", 0)
-	var control_item = ContextMenuItemScript.create("control", "操作", 1)
-	_context_menu.add_item(rotate_item)
-	_context_menu.add_item(control_item)
+	# 標準メニュー項目をセットアップ
+	_context_menu.setup_default_items()
 
 
 func _setup_interaction_manager() -> void:

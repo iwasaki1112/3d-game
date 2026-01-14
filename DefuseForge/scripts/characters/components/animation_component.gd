@@ -33,7 +33,7 @@ const UpperBodyRotationModifierClass = preload("res://scripts/utils/upper_body_r
 
 ## 状態
 var locomotion_state: LocomotionState = LocomotionState.IDLE
-var weapon_type: int = 0  # WeaponRegistry.WeaponType
+var weapon_type: int = 2  # WeaponRegistry.WeaponType (default: PISTOL)
 var is_shooting: bool = false
 var _shooting_blend: float = 0.0
 
