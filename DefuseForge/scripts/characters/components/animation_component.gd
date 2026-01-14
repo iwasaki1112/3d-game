@@ -47,6 +47,7 @@ var _target_aim_rotation: float = 0.0
 
 const SHOOTING_BLEND_SPEED: float = 10.0
 const ANIM_BLEND_TIME: float = 0.3
+const LOCOMOTION_XFADE_TIME: float = 0.2  # 移動アニメーション遷移のクロスフェード時間
 
 
 func _ready() -> void:
@@ -200,9 +201,26 @@ func _setup_animation_tree(model: Node3D) -> void:
 	_blend_tree = AnimationNodeBlendTree.new()
 	anim_tree.tree_root = _blend_tree
 
-	# locomotionアニメーション（全身用）
-	var locomotion_anim = AnimationNodeAnimation.new()
-	_blend_tree.add_node("locomotion", locomotion_anim, Vector2(0, 0))
+	# locomotion用の3つのAnimationNodeAnimationを作成（idle, walk, run）
+	var locomotion_idle = AnimationNodeAnimation.new()
+	var locomotion_walk = AnimationNodeAnimation.new()
+	var locomotion_run = AnimationNodeAnimation.new()
+	_blend_tree.add_node("locomotion_idle", locomotion_idle, Vector2(-200, -100))
+	_blend_tree.add_node("locomotion_walk", locomotion_walk, Vector2(-200, 0))
+	_blend_tree.add_node("locomotion_run", locomotion_run, Vector2(-200, 100))
+
+	# AnimationNodeTransitionを作成（クロスフェード付き遷移）
+	var transition = AnimationNodeTransition.new()
+	transition.xfade_time = LOCOMOTION_XFADE_TIME
+	transition.add_input("idle")    # input 0
+	transition.add_input("walk")    # input 1
+	transition.add_input("run")     # input 2
+	_blend_tree.add_node("locomotion_transition", transition, Vector2(0, 0))
+
+	# locomotionノードをTransitionに接続
+	_blend_tree.connect_node("locomotion_transition", 0, "locomotion_idle")
+	_blend_tree.connect_node("locomotion_transition", 1, "locomotion_walk")
+	_blend_tree.connect_node("locomotion_transition", 2, "locomotion_run")
 
 	# shootアニメーション（上半身用）
 	var shoot_anim = AnimationNodeAnimation.new()
@@ -212,8 +230,8 @@ func _setup_animation_tree(model: Node3D) -> void:
 	var blend2 = AnimationNodeBlend2.new()
 	_blend_tree.add_node("upper_blend", blend2, Vector2(300, 100))
 
-	# 接続
-	_blend_tree.connect_node("upper_blend", 0, "locomotion")
+	# 接続: locomotion_transition → upper_blend → output
+	_blend_tree.connect_node("upper_blend", 0, "locomotion_transition")
 	_blend_tree.connect_node("upper_blend", 1, "shoot")
 	_blend_tree.connect_node("output", 0, "upper_blend")
 
@@ -261,17 +279,50 @@ func _setup_upper_body_filter(blend_node: AnimationNodeBlend2) -> void:
 
 ## 移動アニメーションを更新
 func _update_locomotion_animation() -> void:
-	if _blend_tree == null:
+	if _blend_tree == null or anim_tree == null:
 		return
 
-	var anim_name: String
+	# 各状態のアニメーション名を取得
+	var idle_name = _get_locomotion_anim_name(LocomotionState.IDLE)
+	var walk_name = _get_locomotion_anim_name(LocomotionState.WALK)
+	var run_name = _get_locomotion_anim_name(LocomotionState.RUN)
+
+	# 各ノードにアニメーションを設定
+	var idle_node = _blend_tree.get_node("locomotion_idle") as AnimationNodeAnimation
+	var walk_node = _blend_tree.get_node("locomotion_walk") as AnimationNodeAnimation
+	var run_node = _blend_tree.get_node("locomotion_run") as AnimationNodeAnimation
+	if idle_node:
+		idle_node.animation = idle_name
+	if walk_node:
+		walk_node.animation = walk_name
+	if run_node:
+		run_node.animation = run_name
+
+	# Transitionの状態を切り替え（クロスフェード付き）
+	var transition_name: String
 	match locomotion_state:
 		LocomotionState.IDLE:
-			anim_name = get_animation_name("idle")
+			transition_name = "idle"
 		LocomotionState.WALK:
-			anim_name = get_animation_name("walking")
+			transition_name = "walk"
 		LocomotionState.RUN:
-			anim_name = get_animation_name("sprint")
+			transition_name = "run"
+
+	anim_tree.set("parameters/locomotion_transition/transition_request", transition_name)
+
+
+## 移動状態に応じたアニメーション名を取得（フォールバック付き）
+func _get_locomotion_anim_name(state: LocomotionState) -> String:
+	var base_name: String
+	match state:
+		LocomotionState.IDLE:
+			base_name = "idle"
+		LocomotionState.WALK:
+			base_name = "walking"
+		LocomotionState.RUN:
+			base_name = "sprint"
+
+	var anim_name = get_animation_name(base_name)
 
 	# アニメーションが存在しない場合はフォールバック
 	if not anim_player.has_animation(anim_name):
@@ -281,9 +332,7 @@ func _update_locomotion_animation() -> void:
 			if not anim_player.has_animation(anim_name):
 				anim_name = "idle_none"
 
-	var locomotion_node = _blend_tree.get_node("locomotion") as AnimationNodeAnimation
-	if locomotion_node:
-		locomotion_node.animation = anim_name
+	return anim_name
 
 
 ## 射撃アニメーションを更新

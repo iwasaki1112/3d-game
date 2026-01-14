@@ -689,6 +689,16 @@ character.set_upper_body_rotation(degrees: float)
 var list: PackedStringArray = character.get_animation_list()
 ```
 
+### 移動アニメーション遷移
+
+移動状態（idle/walk/run）の切り替えは `AnimationNodeTransition` によるクロスフェードで滑らかに遷移する。
+
+| 定数 | 値 | 説明 |
+|------|-----|------|
+| LOCOMOTION_XFADE_TIME | 0.2 | 移動アニメーション遷移のクロスフェード時間（秒） |
+
+遷移は `locomotion_changed` シグナル経由で自動発火するため、WASD入力・ドロワーパス移動の両方で同じクロスフェードが適用される。
+
 ## HP
 
 ```gdscript
