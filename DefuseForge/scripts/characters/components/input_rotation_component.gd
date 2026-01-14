@@ -23,6 +23,7 @@ var _camera: Camera3D
 var _is_rotating: bool = false
 var _is_holding: bool = false
 var _is_any_click_started: bool = false
+var _rotation_blocked: bool = false
 var _hold_timer: float = 0.0
 var _hold_mouse_pos: Vector2
 var _ground_plane: Plane
@@ -41,12 +42,17 @@ func setup(camera: Camera3D) -> void:
 
 
 func _process(delta: float) -> void:
-	if _is_holding and not _is_rotating:
+	if _is_holding and not _is_rotating and not _rotation_blocked:
 		_hold_timer += delta
 		if _hold_timer >= hold_duration:
-			_is_rotating = true
-			rotation_started.emit()
-			_rotate_character_to_mouse(_hold_mouse_pos)
+			# Only allow rotation if character is selected
+			if _character.is_selected():
+				_is_rotating = true
+				rotation_started.emit()
+				_rotate_character_to_mouse(_hold_mouse_pos)
+			else:
+				# Block rotation attempt on unselected character
+				_rotation_blocked = true
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -64,15 +70,17 @@ func _unhandled_input(event: InputEvent) -> void:
 					_hold_mouse_pos = mouse_event.position
 			else:
 				if _is_any_click_started:
-					if _is_holding and not _is_rotating:
+					if _is_holding and not _is_rotating and not _rotation_blocked:
 						# Short click on character - not long-press for rotation
 						clicked.emit()
 					elif not _is_holding:
 						# Short click on empty area
 						clicked_empty.emit()
+					# Note: if _rotation_blocked, emit nothing (attempted rotation on unselected)
 				_is_any_click_started = false
 				_is_holding = false
 				_hold_timer = 0.0
+				_rotation_blocked = false
 				if _is_rotating:
 					_is_rotating = false
 					rotation_ended.emit()
