@@ -122,6 +122,11 @@ text = "Click character, select 'Move' from menu"
 layout_mode = 2
 text = "Clear Path"
 
+[node name="ExecuteButton" type="Button" parent="CanvasLayer/UI"]
+layout_mode = 2
+text = "Execute"
+disabled = true
+
 [node name="PointCountLabel" type="Label" parent="CanvasLayer/UI"]
 layout_mode = 2
 text = "Points: 0"

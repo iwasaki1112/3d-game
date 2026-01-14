@@ -14,9 +14,9 @@ const ContextMenuItemScript = preload("res://scripts/resources/context_menu_item
 ## 標準メニュー項目の定義
 ## 各テストシーンで同じ項目を使用するために一元管理
 const DEFAULT_MENU_ITEMS: Array[Dictionary] = [
-	{"id": "move", "name": "移動", "order": 0},
-	{"id": "rotate", "name": "回転", "order": 1},
-	{"id": "control", "name": "操作", "order": 2},
+	{"id": "move", "name": "Move", "order": 0},
+	{"id": "rotate", "name": "Rotate", "order": 1},
+	{"id": "control", "name": "Control", "order": 2},
 ]
 
 @export_group("外観設定")
