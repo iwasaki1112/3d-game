@@ -273,8 +273,8 @@ void fragment() {
 
 func _create_wall(size: Vector3, pos: Vector3, rot_degrees: float) -> StaticBody3D:
 	var wall = StaticBody3D.new()
-	wall.collision_layer = 2  # Layer 2 = 壁（VisionComponentのwall_collision_maskと一致）
-	wall.collision_mask = 0   # 他のものと衝突しない
+	wall.collision_layer = 3  # Layer 1（物理衝突）+ Layer 2（視界検出）
+	wall.collision_mask = 0   # 壁自体は他の物体を検出しない
 	wall.add_to_group("walls")  # シャドウキャスト用のグループ
 
 	# メッシュ

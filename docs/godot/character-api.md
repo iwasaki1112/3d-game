@@ -296,6 +296,60 @@ func _ready():
 
 ---
 
+## コリジョンレイヤー規約
+
+プロジェクト全体で統一された物理レイヤー構成。
+
+### レイヤー定義
+
+| Layer | 用途 | 使用例 |
+|-------|------|--------|
+| 1 | 物理衝突 | キャラクター、床、物体 |
+| 2 | 視界遮断 | 壁、障害物（VisionComponent用） |
+
+### 推奨設定
+
+**キャラクター（CharacterBody3D）**:
+```gdscript
+collision_layer = 1  # Layer 1に存在
+collision_mask = 3   # Layer 1 + Layer 2と衝突
+```
+
+**壁（StaticBody3D）**:
+```gdscript
+collision_layer = 3  # Layer 1（物理衝突）+ Layer 2（視界検出）
+collision_mask = 0   # 静的オブジェクトなので検出不要
+```
+
+**床（StaticBody3D）**:
+```gdscript
+collision_layer = 1  # Layer 1
+collision_mask = 0   # 静的オブジェクトなので検出不要
+```
+
+### Blender GLBインポート時のコリジョン
+
+Blenderからインポートするマップ用GLBファイルでコリジョンを生成する方法:
+
+**方法1: メッシュ名によるサフィックス（推奨）**
+
+Blenderでメッシュ名にサフィックスを付与:
+- `-col`: ConvexShape（凸包コリジョン、シンプルな形状用）
+- `-colonly`: コリジョンのみ生成（メッシュ非表示）
+- `-trimesh`: ConcaveShape（複雑な形状用）
+
+例: `Wall-col` → StaticBody3D + CollisionShape3D が自動生成
+
+**方法2: インポート設定**
+
+1. GLBファイルをダブルクリック → インポート設定
+2. `Physics > Shape Type` を選択
+3. 「Reimport」をクリック
+
+**注意**: インポート後、壁の `collision_layer` を 3 に変更する必要あり。
+
+---
+
 ## 移動
 
 MovementComponentは2つの移動モードをサポート:

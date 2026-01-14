@@ -40,6 +40,8 @@ script = ExtResource("1_viewer")
 
 [node name="CharacterBody" type="CharacterBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.025291145, 0)
+collision_layer = 1
+collision_mask = 3
 script = ExtResource("4_character_base")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="CharacterBody"]
