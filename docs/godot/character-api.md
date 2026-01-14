@@ -84,9 +84,31 @@ character.set_outline_width(3.0)
     ↓
 選択 + ハイライト + メニュー表示
     ↓
-「回転」を選択
-    ↓
-任意の場所をタップ → その方向にキャラクターが向く
+「回転」を選択 → 任意の場所をタップ → その方向にキャラクターが向く
+または
+「操作」を選択 → そのキャラクターがWASD操作対象になる
+```
+
+### 複数キャラクター操作切替
+
+`action_started`シグナルで「操作」アクションを検知し、操作対象キャラクターを切り替える:
+
+```gdscript
+var controlled_character: CharacterBase = null
+
+func _ready():
+    interaction_manager.action_started.connect(_on_action_started)
+    controlled_character = characters[0]  # デフォルト
+
+func _on_action_started(action_id: String, character: CharacterBody3D) -> void:
+    if action_id == "control" and character:
+        controlled_character = character as CharacterBase
+
+func _physics_process(_delta: float) -> void:
+    if controlled_character and controlled_character.movement:
+        var input_dir = Vector3.ZERO
+        # WASD入力処理...
+        controlled_character.movement.set_input_direction(input_dir, is_running)
 ```
 
 ### SelectionManager
@@ -175,20 +197,25 @@ item.order = 0                 # 表示順序
 
 ### CharacterInteractionManager
 
-状態マシンによるワークフロー制御。
+状態マシンによるワークフロー制御。単一または複数キャラクターに対応。
 
 ```gdscript
 # インスタンス作成
 var interaction_manager = CharacterInteractionManager.new()
 add_child(interaction_manager)
 
-# 各コンポーネントを接続
+# 各コンポーネントを接続（プライマリキャラクター）
 interaction_manager.setup(
     selection_manager,
     context_menu,
-    input_rotation,
+    input_rotation,  # プライマリキャラクターのInputRotation
     camera
 )
+
+# 追加キャラクターのInputRotationを登録（複数キャラクター対応）
+for i in range(1, characters.size()):
+    var input_rot = characters[i].get_node("InputRotationComponent")
+    interaction_manager.register_input_rotation(input_rot, characters[i])
 
 # 現在の状態を取得
 var state = interaction_manager.get_current_state()
@@ -568,21 +595,35 @@ CharacterAPI.copy_animations_from(character, "vanguard")
 
 ## FogOfWarSystem
 
-視界に基づく霧システム。視界外を霧で覆い隠す。
+視界に基づく霧システム。視界外を霧で覆い隠す。複数キャラクターの視界統合に対応。
 
 ```gdscript
 # FogOfWarSystemを作成
 var fog_system = FogOfWarSystem.new()
 add_child(fog_system)
 
-# キャラクターの視界を登録
-fog_system.register_vision(character.vision)
+# キャラクターの視界を登録（複数登録可能）
+fog_system.register_vision(character1.vision)
+fog_system.register_vision(character2.vision)
+# → 両キャラクターの視界が統合されて表示
 
 # 視界登録を解除
 fog_system.unregister_vision(character.vision)
 
 # 可視性テクスチャを取得（シェーダー用）
 var texture = fog_system.get_visibility_texture()
+```
+
+### 複数視界の統合
+
+複数の`VisionComponent`を登録すると、各視界ポリゴンが自動的に統合描画される。
+チーム全員の視界を合成した「共有視界」を実現可能。
+
+```gdscript
+# チーム全員の視界を登録
+for character in team_characters:
+    if character.vision:
+        fog_system.register_vision(character.vision)
 ```
 
 ### エクスポート設定

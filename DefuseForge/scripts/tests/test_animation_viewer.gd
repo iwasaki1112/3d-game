@@ -10,8 +10,12 @@ const ContextMenuComponentScript = preload("res://scripts/ui/context_menu_compon
 const ContextMenuItemScript = preload("res://scripts/resources/context_menu_item.gd")
 
 @onready var camera: Camera3D = $OrbitCamera
-@onready var character_body: CharacterBase = $CharacterBody
 @onready var canvas_layer: CanvasLayer = $CanvasLayer
+
+# 複数キャラクター管理
+var characters: Array[CharacterBase] = []
+var controlled_character: CharacterBase = null  # WASD操作対象
+var character_body: CharacterBase = null  # 後方互換性のため保持
 
 var _animations: Array[String] = []
 const GRAVITY: float = 9.8
@@ -73,7 +77,7 @@ var wall_shader_material: ShaderMaterial = null
 
 # Input rotation component (click on character + drag)
 const InputRotationComponentScript = preload("res://scripts/characters/components/input_rotation_component.gd")
-var _input_rotation: Node
+var _input_rotations: Array[Node] = []  # 各キャラクター用
 
 # Selection management
 var _selection_manager: Node
@@ -103,8 +107,21 @@ func _ready() -> void:
 	# Create UI layout
 	_create_ui_layout()
 
+	# 複数キャラクターを配列に追加
+	var char1 = get_node_or_null("CharacterBody") as CharacterBase
+	var char2 = get_node_or_null("CharacterBody2") as CharacterBase
+	if char1:
+		characters.append(char1)
+	if char2:
+		characters.append(char2)
+
+	# デフォルトは1体目を操作
+	if characters.size() > 0:
+		controlled_character = characters[0]
+		character_body = characters[0]  # 後方互換性
+
 	# Get reference to character model
-	character_model = character_body.get_node_or_null("CharacterModel")
+	character_model = character_body.get_node_or_null("CharacterModel") if character_body else null
 
 	# Scan available characters and weapons
 	_scan_available_characters()
@@ -136,9 +153,20 @@ func _ready() -> void:
 	if camera.has_method("set_target") and character_body:
 		camera.set_target(character_body)
 
-	# Setup outline camera (SubViewport方式に必要)
-	if character_body:
-		character_body.setup_outline_camera(camera)
+	# Setup outline camera for all characters (SubViewport方式に必要)
+	for character in characters:
+		character.setup_outline_camera(camera)
+
+	# 2体目にも武器を装備してIKオフセットを適用
+	for i in range(1, characters.size()):
+		characters[i].set_weapon(_weapon_id_string_to_int(current_weapon_id))
+		CharacterAPIScript.apply_character_ik_from_resource(characters[i], current_character_id)
+
+	# 2体目のIK値も更新（1フレーム待ってから）
+	await get_tree().process_frame
+	for i in range(1, characters.size()):
+		CharacterAPIScript.update_elbow_pole_position(characters[i], elbow_pole_x, elbow_pole_y, elbow_pole_z)
+		CharacterAPIScript.update_left_hand_position(characters[i], left_hand_x, left_hand_y, left_hand_z)
 
 	# Setup selection manager
 	_selection_manager = SelectionManagerScript.new()
@@ -165,12 +193,15 @@ func _ready() -> void:
 
 
 func _setup_input_rotation() -> void:
-	_input_rotation = InputRotationComponentScript.new()
-	_input_rotation.name = "InputRotationComponent"
-	character_body.add_child(_input_rotation)
-	_input_rotation.setup(camera)
-	# Enable menu-based activation (disable long-press auto-rotation)
-	_input_rotation.require_menu_activation = true
+	# 各キャラクターにInputRotationComponentを追加
+	for character in characters:
+		var input_rotation = InputRotationComponentScript.new()
+		input_rotation.name = "InputRotationComponent"
+		character.add_child(input_rotation)
+		input_rotation.setup(camera)
+		# Enable menu-based activation (disable long-press auto-rotation)
+		input_rotation.require_menu_activation = true
+		_input_rotations.append(input_rotation)
 
 
 func _setup_context_menu() -> void:
@@ -181,7 +212,9 @@ func _setup_context_menu() -> void:
 
 	# Add menu items
 	var rotate_item = ContextMenuItemScript.create("rotate", "回転", 0)
+	var control_item = ContextMenuItemScript.create("control", "操作", 1)
 	_context_menu.add_item(rotate_item)
+	_context_menu.add_item(control_item)
 
 
 func _setup_interaction_manager() -> void:
@@ -189,13 +222,21 @@ func _setup_interaction_manager() -> void:
 	_interaction_manager.name = "CharacterInteractionManager"
 	add_child(_interaction_manager)
 
-	# Setup with all components
+	# Setup with base components (最初のInputRotationを渡す)
+	var first_input_rotation = _input_rotations[0] if _input_rotations.size() > 0 else null
 	_interaction_manager.setup(
 		_selection_manager,
 		_context_menu,
-		_input_rotation,
+		first_input_rotation,
 		camera
 	)
+
+	# 追加のInputRotationを登録（2体目以降）
+	for i in range(1, _input_rotations.size()):
+		_interaction_manager.register_input_rotation(_input_rotations[i], characters[i])
+
+	# action_startedシグナルを接続（操作切替用）
+	_interaction_manager.action_started.connect(_on_action_started)
 
 	# Connect state changes for UI updates
 	_interaction_manager.state_changed.connect(_on_interaction_state_changed)
@@ -208,10 +249,11 @@ func _setup_fog_of_war() -> void:
 	fog_of_war_system.name = "FogOfWarSystem"
 	add_child(fog_of_war_system)
 
-	# キャラクターの視界を登録
+	# すべてのキャラクターの視界を登録
 	await get_tree().process_frame
-	if character_body and character_body.vision:
-		fog_of_war_system.register_vision(character_body.vision)
+	for character in characters:
+		if character and character.vision:
+			fog_of_war_system.register_vision(character.vision)
 
 
 func _create_test_walls() -> void:
@@ -691,7 +733,8 @@ func _collect_animations() -> void:
 
 
 func _physics_process(_delta: float) -> void:
-	if character_body and character_body.movement:
+	# 操作対象キャラクターにWASD入力を送信
+	if controlled_character and controlled_character.movement:
 		# WASD移動入力
 		var input_dir = Vector3.ZERO
 		if Input.is_key_pressed(KEY_W):
@@ -709,7 +752,7 @@ func _physics_process(_delta: float) -> void:
 
 		# Shiftで走る
 		var is_running = Input.is_key_pressed(KEY_SHIFT)
-		character_body.movement.set_input_direction(input_dir, is_running)
+		controlled_character.movement.set_input_direction(input_dir, is_running)
 		# CharacterBase._physics_process()がmove_and_slide()を呼ぶ
 
 
@@ -932,3 +975,10 @@ func _on_interaction_state_changed(_old_state: int, new_state: int) -> void:
 func _toggle_laser() -> void:
 	CharacterAPIScript.toggle_laser(character_body)
 	print("[AnimViewer] Laser toggled")
+
+
+## 操作切替処理
+func _on_action_started(action_id: String, character: CharacterBody3D) -> void:
+	if action_id == "control" and character:
+		controlled_character = character as CharacterBase
+		print("[AnimViewer] Control switched to: %s" % character.name)

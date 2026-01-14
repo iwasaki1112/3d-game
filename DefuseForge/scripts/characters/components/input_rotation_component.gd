@@ -26,6 +26,7 @@ var _camera: Camera3D
 var _is_rotating: bool = false
 var _is_holding: bool = false
 var _is_any_click_started: bool = false
+var _click_started_on_any_character: bool = false  ## 他のキャラクターも含めてクリックされたか
 var _rotation_blocked: bool = false
 var _hold_timer: float = 0.0
 var _hold_mouse_pos: Vector2
@@ -75,6 +76,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
 			if mouse_event.pressed:
 				_is_any_click_started = true
+				_click_started_on_any_character = _is_clicking_on_any_character(mouse_event.position)
 				if _external_rotation_mode:
 					# External mode: tap to rotate instantly and end rotation mode
 					_rotate_character_to_mouse(mouse_event.position)
@@ -89,13 +91,14 @@ func _unhandled_input(event: InputEvent) -> void:
 					if _is_holding and not _is_rotating and not _rotation_blocked:
 						# Short click on character - not long-press for rotation
 						clicked.emit()
-					elif not _is_holding:
-						# Short click on empty area
+					elif not _is_holding and not _click_started_on_any_character:
+						# Short click on empty area - only if click started on empty area
 						clicked_empty.emit()
 					# Note: if _rotation_blocked, emit nothing (attempted rotation on unselected)
 					_is_holding = false
 					_hold_timer = 0.0
 					_rotation_blocked = false
+					_click_started_on_any_character = false
 					if _is_rotating:
 						_is_rotating = false
 						rotation_ended.emit()
@@ -129,6 +132,24 @@ func _is_clicking_on_character(mouse_pos: Vector2) -> bool:
 		var char_pos = _character.global_position
 		if click_pos.distance_to(char_pos) < click_radius:
 			return true
+
+	return false
+
+
+## Check if clicking on ANY character (not just this one) - for clicked_empty detection
+func _is_clicking_on_any_character(mouse_pos: Vector2) -> bool:
+	var ray_origin = _camera.project_ray_origin(mouse_pos)
+	var ray_direction = _camera.project_ray_normal(mouse_pos)
+	var ray_end = ray_origin + ray_direction * 100.0
+
+	var space_state = _character.get_world_3d().direct_space_state
+	var query = PhysicsRayQueryParameters3D.create(ray_origin, ray_end)
+	query.collision_mask = character_collision_mask
+	var result = space_state.intersect_ray(query)
+
+	# Hit any character
+	if result and result.collider is CharacterBody3D:
+		return true
 
 	return false
 

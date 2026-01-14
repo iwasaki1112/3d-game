@@ -59,7 +59,12 @@ func _build_ui() -> void:
 ## メニューを開く
 func open(screen_position: Vector2, character: CharacterBody3D) -> void:
 	if _is_open:
-		close()
+		# 既に開いている場合は即座にリセット（アニメーションなし、シグナルなし）
+		if _tween:
+			_tween.kill()
+		_panel.hide()
+		_is_open = false
+		# menu_closedは発火しない（新しいメニューを開くため）
 
 	_current_character = character
 	_is_open = true
@@ -87,6 +92,7 @@ func open(screen_position: Vector2, character: CharacterBody3D) -> void:
 
 	# アニメーション
 	show()
+	_panel.show()  # パネルも表示（リセット時にhide()されているため）
 	_panel.modulate.a = 0.0
 	_panel.scale = Vector2(0.9, 0.9)
 

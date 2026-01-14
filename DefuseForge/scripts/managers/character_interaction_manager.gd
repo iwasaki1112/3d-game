@@ -17,7 +17,8 @@ signal action_completed(action_id: String, character: CharacterBody3D)
 var _state: InteractionState = InteractionState.IDLE
 var _selection_manager: Node = null  # SelectionManager
 var _context_menu: Control = null  # ContextMenuComponent
-var _input_rotation: Node = null  # InputRotationComponent
+var _input_rotation: Node = null  # InputRotationComponent (current/active)
+var _primary_input_rotation: Node = null  # InputRotationComponent (from setup, first character)
 var _camera: Camera3D = null
 var _current_action_character: CharacterBody3D = null
 
@@ -36,20 +37,50 @@ func setup(
 	_selection_manager = selection_manager
 	_context_menu = context_menu
 	_input_rotation = input_rotation
+	_primary_input_rotation = input_rotation  # Store for _on_character_clicked
 	_camera = camera
 
-	# シグナル接続
-	if _input_rotation.has_signal("clicked"):
+	# シグナル接続（単一InputRotation用、後方互換性）
+	if _input_rotation and _input_rotation.has_signal("clicked"):
 		_input_rotation.clicked.connect(_on_character_clicked)
-	if _input_rotation.has_signal("clicked_empty"):
+	if _input_rotation and _input_rotation.has_signal("clicked_empty"):
 		_input_rotation.clicked_empty.connect(_on_empty_clicked)
-	if _input_rotation.has_signal("rotation_ended"):
+	if _input_rotation and _input_rotation.has_signal("rotation_ended"):
 		_input_rotation.rotation_ended.connect(_on_rotation_ended)
 
 	if _context_menu.has_signal("item_selected"):
 		_context_menu.item_selected.connect(_on_menu_item_selected)
 	if _context_menu.has_signal("menu_closed"):
 		_context_menu.menu_closed.connect(_on_menu_closed)
+
+
+## 追加のInputRotationComponentを登録（複数キャラクター対応）
+func register_input_rotation(input_rotation: Node, character: CharacterBody3D) -> void:
+	if input_rotation.has_signal("clicked"):
+		input_rotation.clicked.connect(_on_character_clicked_for.bind(character, input_rotation))
+	if input_rotation.has_signal("clicked_empty"):
+		input_rotation.clicked_empty.connect(_on_empty_clicked)
+	if input_rotation.has_signal("rotation_ended"):
+		input_rotation.rotation_ended.connect(_on_rotation_ended)
+
+
+## 特定キャラクタークリック時（register_input_rotation経由）
+func _on_character_clicked_for(character: CharacterBody3D, input_rotation: Node) -> void:
+	_input_rotation = input_rotation  # 現在のInputRotationを記録
+
+	# 選択してメニューを表示
+	if _selection_manager:
+		_selection_manager.select(character)
+
+	# 画面座標を計算
+	var screen_pos = Vector2.ZERO
+	if _camera:
+		screen_pos = _camera.unproject_position(character.global_position)
+		screen_pos += Vector2(20, -20)
+
+	# メニューを開く
+	_context_menu.open(screen_pos, character)
+	_set_state(InteractionState.MENU_OPEN)
 
 
 ## 状態を変更
@@ -77,18 +108,21 @@ func cancel_current_action() -> void:
 	_set_state(InteractionState.IDLE)
 
 
-## キャラクタークリック時
+## キャラクタークリック時（setup()で登録されたプライマリキャラクター用）
 func _on_character_clicked() -> void:
-	var character = _selection_manager.get_selected() if _selection_manager else null
+	var character: CharacterBody3D = null
 
-	# InputRotationComponentの親キャラクターを取得
-	if _input_rotation:
-		var parent = _input_rotation.get_parent()
+	# プライマリInputRotationの親キャラクターを取得
+	if _primary_input_rotation:
+		var parent = _primary_input_rotation.get_parent()
 		if parent is CharacterBody3D:
 			character = parent
 
 	if not character:
 		return
+
+	# 現在のInputRotationを更新
+	_input_rotation = _primary_input_rotation
 
 	# 選択してメニューを表示
 	if _selection_manager:

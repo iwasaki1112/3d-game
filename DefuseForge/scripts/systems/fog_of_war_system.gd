@@ -18,7 +18,7 @@ extends Node3D
 var _fog_mesh: MeshInstance3D
 var _fog_material: ShaderMaterial
 var _visibility_viewport: SubViewport
-var _visibility_polygon: Polygon2D
+var _visibility_polygons: Array[Polygon2D] = []  # 複数視界用ポリゴン配列
 
 ## 視界データ
 var _vision_components: Array = []
@@ -45,12 +45,7 @@ func _setup_visibility_viewport() -> void:
 	bg.color = Color(0, 0, 0, 1)
 	bg.size = Vector2(texture_resolution, texture_resolution)
 	_visibility_viewport.add_child(bg)
-
-	# 可視領域ポリゴン（白）
-	_visibility_polygon = Polygon2D.new()
-	_visibility_polygon.color = Color(1, 1, 1, 1)
-	_visibility_polygon.antialiased = true  # アンチエイリアス
-	_visibility_viewport.add_child(_visibility_polygon)
+	# 可視領域ポリゴンは動的に作成（_sync_polygon_count で管理）
 
 
 func _setup_fog_mesh() -> void:
@@ -111,21 +106,43 @@ func _process(_delta: float) -> void:
 
 
 func _update_visibility_texture() -> void:
+	_sync_polygon_count()
+
 	if _vision_components.is_empty():
-		_visibility_polygon.polygon = PackedVector2Array()
 		return
 
-	# 最初のVisionComponentのポリゴンを使用
-	var vision = _vision_components[0]
-	if not is_instance_valid(vision):
-		return
+	# 各VisionComponentのポリゴンを描画
+	for i in range(_vision_components.size()):
+		var vision = _vision_components[i]
+		if not is_instance_valid(vision):
+			_visibility_polygons[i].polygon = PackedVector2Array()
+			continue
 
-	var polygon_3d = vision.get_visible_polygon()
+		var polygon_3d = vision.get_visible_polygon()
+		_visibility_polygons[i].polygon = _convert_polygon_to_2d(polygon_3d)
+
+
+## ポリゴン数をVisionComponent数に同期
+func _sync_polygon_count() -> void:
+	# 不足分を追加
+	while _visibility_polygons.size() < _vision_components.size():
+		var polygon = Polygon2D.new()
+		polygon.color = Color(1, 1, 1, 1)
+		polygon.antialiased = true
+		_visibility_viewport.add_child(polygon)
+		_visibility_polygons.append(polygon)
+
+	# 余剰分を削除
+	while _visibility_polygons.size() > _vision_components.size():
+		var polygon = _visibility_polygons.pop_back()
+		polygon.queue_free()
+
+
+## 3Dポリゴンを2Dテクスチャ座標に変換
+func _convert_polygon_to_2d(polygon_3d: PackedVector3Array) -> PackedVector2Array:
 	if polygon_3d.size() < 3:
-		_visibility_polygon.polygon = PackedVector2Array()
-		return
+		return PackedVector2Array()
 
-	# 3Dポリゴンを2Dテクスチャ座標に変換
 	var polygon_2d = PackedVector2Array()
 	var half_map = map_size / 2
 
@@ -135,7 +152,7 @@ func _update_visibility_texture() -> void:
 		var uv_y = (point.z + half_map.y) / map_size.y
 		polygon_2d.append(Vector2(uv_x * texture_resolution, uv_y * texture_resolution))
 
-	_visibility_polygon.polygon = polygon_2d
+	return polygon_2d
 
 
 ## VisionComponentを登録
