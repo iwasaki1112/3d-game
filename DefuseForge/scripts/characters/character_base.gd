@@ -14,6 +14,7 @@ const WeaponComponentScript = preload("res://scripts/characters/components/weapo
 const HealthComponentScript = preload("res://scripts/characters/components/health_component.gd")
 const VisionComponentScript = preload("res://scripts/characters/components/vision_component.gd")
 const OutlineComponentScript = preload("res://scripts/characters/components/outline_component.gd")
+const CharacterAPIScript = preload("res://scripts/api/character_api.gd")
 
 ## シグナル
 signal path_completed
@@ -35,6 +36,11 @@ signal action_completed(action_type: int)
 
 @export_group("チーム設定")
 @export var team: Team = Team.NONE
+
+@export_group("キャラクター設定")
+## キャラクターID（"vanguard", "phantom"など）
+## 設定するとアニメーションが自動セットアップされる
+@export var character_id: String = ""
 
 @export_group("自動照準設定")
 @export var auto_aim_enabled: bool = true
@@ -67,6 +73,9 @@ func _ready() -> void:
 	_find_model_and_skeleton()
 	_setup_components()
 	_connect_signals()
+	# character_idが設定されている場合、アニメーションを自動セットアップ
+	if not character_id.is_empty():
+		CharacterAPIScript.setup_animations(self, character_id)
 
 
 func _physics_process(delta: float) -> void:

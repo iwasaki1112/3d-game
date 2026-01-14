@@ -44,6 +44,7 @@ transform = Transform3D(0.99913955, 0, -0.041474514, 0, 1, 0, 0.041474514, 0, 0.
 collision_mask = 3
 script = ExtResource("4_character_base")
 team = 1
+character_id = "vanguard"
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="CharacterBody"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
@@ -56,6 +57,7 @@ transform = Transform3D(0.99914604, 0, -0.04131753, 0, 1, 0, 0.04131753, 0, 0.99
 collision_mask = 3
 script = ExtResource("4_character_base")
 team = 1
+character_id = "vanguard"
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="CharacterBody2"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
@@ -68,6 +70,7 @@ transform = Transform3D(-0.9997237, 0, 0.023507487, 0, 1, 0, -0.023507487, 0, -0
 collision_mask = 3
 script = ExtResource("4_character_base")
 team = 2
+character_id = "phantom"
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="CharacterBody3"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
@@ -80,6 +83,7 @@ transform = Transform3D(-0.9953088, 0, 0.09674904, 0, 1, 0, -0.09674904, 0, -0.9
 collision_mask = 3
 script = ExtResource("4_character_base")
 team = 2
+character_id = "phantom"
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="CharacterBody4"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)

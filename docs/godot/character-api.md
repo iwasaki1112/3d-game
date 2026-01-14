@@ -698,6 +698,34 @@ CharacterAPI.switch_character_model(character, "swat", weapon_id)
 CharacterAPI.copy_animations_from(character, "vanguard")
 ```
 
+### character_id によるアニメーション自動セットアップ
+
+CharacterBaseに`character_id`を設定すると、`_ready()`時にアニメーションが自動セットアップされる。
+これにより、手動で`CharacterAPI.setup_animations()`を呼ぶ必要がなくなり、T-ポーズ問題を防止できる。
+
+```gdscript
+# エクスポートプロパティ
+@export var character_id: String = ""  # "vanguard", "phantom" など
+```
+
+**シーンファイルでの設定例:**
+```ini
+[node name="CharacterBody" type="CharacterBody3D" parent="."]
+script = ExtResource("character_base")
+team = 2
+character_id = "phantom"
+```
+
+**動作:**
+1. `character_id`が設定されている場合、`_ready()`で自動的に`CharacterAPI.setup_animations()`が呼ばれる
+2. アニメーションがない場合、共有元（vanguard等）からコピーされる
+3. 手動呼び出しは不要
+
+**利点:**
+- 実行順序を気にする必要がない
+- 名前ベースの脆弱な判定が不要
+- シーンファイルで宣言的に設定できる
+
 ---
 
 ## FogOfWarSystem

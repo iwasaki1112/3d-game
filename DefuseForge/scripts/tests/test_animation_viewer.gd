@@ -147,16 +147,8 @@ func _ready() -> void:
 	_load_character_resource(current_character_id)
 
 	# Wait for CharacterBase to setup
+	# （character_idが設定されていれば、CharacterBase._ready()でアニメーションが自動セットアップされる）
 	await get_tree().process_frame
-
-	# phantomモデルのアニメーションをセットアップ（vanguardからコピー）- 先に実行
-	print("[AnimViewer] Setting up animations for phantom characters")
-	for i in range(characters.size()):
-		var character = characters[i]
-		# phantomモデルを使用しているキャラクター（CharacterBody3, CharacterBody4）
-		if character.name in ["CharacterBody3", "CharacterBody4"]:
-			print("[AnimViewer] Calling setup_animations for character %d: %s" % [i, character.name])
-			CharacterAPIScript.setup_animations(character, "phantom")
 
 	# Equip weapon
 	character_body.set_weapon(_weapon_id_string_to_int(current_weapon_id))
