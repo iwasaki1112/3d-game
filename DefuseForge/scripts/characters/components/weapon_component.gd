@@ -2,9 +2,10 @@ class_name WeaponComponent
 extends Node
 
 ## 武器管理コンポーネント
-## 武器装着、リコイル、左手IKを担当
+## 武器装着、リコイル、左手IK、ヒット検出を担当
 
 signal weapon_changed(weapon_id: int)
+signal hit_detected(target: Node3D, hit_point: Vector3, is_headshot: bool)
 
 ## 内部参照
 var skeleton: Skeleton3D
@@ -39,6 +40,12 @@ var _muzzle_flash: Node3D = null  # MuzzleFlash instance
 ## TracerEffect参照
 var _tracer_effect: Node3D = null  # TracerEffect instance
 
+## ダメージ用RayCast
+var _damage_raycast: RayCast3D = null
+
+## 所有キャラクター参照
+var _owner_character = null  # CharacterBase
+
 
 func _ready() -> void:
 	pass
@@ -46,8 +53,10 @@ func _ready() -> void:
 
 ## 初期化
 ## @param skel: Skeleton3D
-func setup(skel: Skeleton3D) -> void:
+## @param owner_char: 所有者のCharacterBase（ダメージ判定用）
+func setup(skel: Skeleton3D, owner_char = null) -> void:
 	skeleton = skel
+	_owner_character = owner_char
 
 
 ## 武器を設定
@@ -102,6 +111,9 @@ func apply_recoil(intensity: float) -> void:
 	# TracerEffectを発火
 	if _tracer_effect:
 		_tracer_effect.fire()
+
+	# ダメージ判定を実行
+	fire()
 
 
 ## 毎フレーム更新（リコイル回復）
@@ -167,6 +179,9 @@ func _attach_weapon() -> void:
 	# TracerEffectを検索
 	_find_tracer_effect()
 
+	# ダメージ用RayCastをセットアップ
+	_setup_damage_raycast()
+
 
 ## リコイルを回復
 func _recover_recoil() -> void:
@@ -184,6 +199,10 @@ func _cleanup_weapon() -> void:
 	laser_pointer = null
 	_muzzle_flash = null
 	_tracer_effect = null
+
+	if _damage_raycast:
+		_damage_raycast.queue_free()
+		_damage_raycast = null
 
 	if weapon_attachment:
 		weapon_attachment.queue_free()
@@ -415,6 +434,120 @@ func _find_tracer_effect() -> void:
 	var muzzle_point = current_weapon.find_child("MuzzlePoint", true, false)
 	if muzzle_point:
 		_tracer_effect = muzzle_point.find_child("TracerEffect", false, false)
+
+
+## ダメージ用RayCastをセットアップ
+func _setup_damage_raycast() -> void:
+	if current_weapon == null:
+		return
+
+	# 既存のRayCastを削除
+	if _damage_raycast:
+		_damage_raycast.queue_free()
+		_damage_raycast = null
+
+	# TracerEffectと同じ位置・方向を使用するため、TracerEffectの子として追加
+	if _tracer_effect == null:
+		var muzzle_point = current_weapon.find_child("MuzzlePoint", true, false)
+		if muzzle_point == null:
+			return
+		# MuzzlePointに直接追加（フォールバック）
+		_damage_raycast = RayCast3D.new()
+		_damage_raycast.name = "DamageRayCast"
+		var effective_range = weapon_resource.effective_range if weapon_resource else 100.0
+		_damage_raycast.target_position = Vector3(0, 0, -effective_range)
+		muzzle_point.add_child(_damage_raycast)
+	else:
+		# TracerEffectの子として追加（同じ方向を共有）
+		_damage_raycast = RayCast3D.new()
+		_damage_raycast.name = "DamageRayCast"
+		var effective_range = weapon_resource.effective_range if weapon_resource else 100.0
+		# TracerEffectのローカル-Z方向を使用
+		_damage_raycast.target_position = Vector3(0, 0, -effective_range)
+		_tracer_effect.add_child(_damage_raycast)
+
+	_damage_raycast.collision_mask = 1  # Layer 1（キャラクター）
+	_damage_raycast.enabled = true
+	_damage_raycast.exclude_parent = true
+
+	# 自分自身のキャラクターを除外リストに追加
+	if _owner_character:
+		_damage_raycast.add_exception(_owner_character)
+
+
+## 射撃によるダメージ判定
+func fire() -> void:
+	if _damage_raycast == null:
+		print("[WeaponComponent] fire(): _damage_raycast is null")
+		return
+	if _owner_character == null:
+		print("[WeaponComponent] fire(): _owner_character is null")
+		return
+
+	_damage_raycast.force_raycast_update()
+
+	# デバッグ: RayCastの位置と方向を出力
+	var ray_origin = _damage_raycast.global_position
+	var ray_dir = _damage_raycast.global_transform.basis * _damage_raycast.target_position
+	print("[WeaponComponent] fire(): RayCast origin=%s, direction=%s" % [ray_origin, ray_dir.normalized()])
+
+	if not _damage_raycast.is_colliding():
+		print("[WeaponComponent] fire(): No collision detected")
+		return
+
+	var collider = _damage_raycast.get_collider()
+	var hit_point = _damage_raycast.get_collision_point()
+	print("[WeaponComponent] fire(): Collider = %s" % collider.name)
+
+	# CharacterBaseかどうかチェック
+	if not (collider is CharacterBody3D and collider.has_method("is_enemy_of")):
+		print("[WeaponComponent] fire(): Collider is not CharacterBase")
+		return
+
+	var target = collider
+
+	# チーム判定
+	print("[WeaponComponent] fire(): Owner team = %d, Target team = %d" % [_owner_character.team, target.team])
+	if not _owner_character.is_enemy_of(target):
+		print("[WeaponComponent] fire(): Not enemy, skipping")
+		return
+
+	# ヘッドショット判定
+	var is_headshot = _check_headshot(target, hit_point)
+
+	# ダメージ計算
+	var damage = _calculate_damage(is_headshot)
+
+	# ダメージ適用
+	target.take_damage(damage, _owner_character, is_headshot)
+
+	# シグナル発火
+	hit_detected.emit(target, hit_point, is_headshot)
+
+	print("[WeaponComponent] Hit: %s, Damage: %.1f, Headshot: %s" % [target.name, damage, is_headshot])
+
+
+## ヘッドショット判定
+## @param target: 対象キャラクター
+## @param hit_point: 衝突点
+## @return: ヘッドショットならtrue
+func _check_headshot(target: Node3D, hit_point: Vector3) -> bool:
+	# ターゲットの頭の高さを推定（位置 + 1.5m以上）
+	var head_height = target.global_position.y + 1.5
+	return hit_point.y >= head_height
+
+
+## ダメージ計算
+## @param is_headshot: ヘッドショットかどうか
+## @return: ダメージ量
+func _calculate_damage(is_headshot: bool) -> float:
+	if weapon_resource == null:
+		return 0.0
+
+	var base_damage = weapon_resource.damage
+	if is_headshot:
+		return base_damage * weapon_resource.headshot_multiplier
+	return base_damage * weapon_resource.bodyshot_multiplier
 
 
 ## レーザーポインターをトグル

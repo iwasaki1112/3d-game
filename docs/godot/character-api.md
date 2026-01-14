@@ -503,13 +503,69 @@ character.apply_recoil(intensity: float = 1.0)
 
 1. **武器オフセット**: 武器を後方に跳ねさせる（Y+0.02, Z+0.05 × intensity）
 2. **MuzzleFlash発火**: 銃口のフラッシュエフェクトを表示（50ms）
-3. **上半身リコイル**: Spineボーンを後方に傾ける（~4.5度）→ 滑らかに回復
+3. **TracerEffect発火**: 弾道トレーサーを表示
+4. **ヒット検出**: RayCast3Dで敵キャラクターを検出してダメージを適用
+5. **上半身リコイル**: Spineボーンを後方に傾ける（~4.5度）→ 滑らかに回復
 
 ```gdscript
 # 射撃時に呼び出し（test_animation_viewer.gd参照）
 func _shoot() -> void:
     character.apply_recoil(1.0)
 ```
+
+### 射撃ヒット検出
+
+`apply_recoil()` 呼び出し時、内部で `fire()` が実行され RayCast3D によるヒット検出が行われる。
+
+#### 処理フロー
+
+```
+apply_recoil()
+    ↓
+WeaponComponent.apply_recoil()
+    ├─ MuzzleFlash.flash()
+    ├─ TracerEffect.fire()
+    └─ fire()  ← ヒット検出
+            ↓
+        RayCast3D.force_raycast_update()
+            ↓
+        衝突判定 && CharacterBase?
+            ↓
+        is_enemy_of(target)?
+            ↓ Yes
+        _calculate_damage() → target.take_damage()
+```
+
+#### ダメージ計算
+
+```gdscript
+# WeaponResource の damage 値を使用
+# ヘッドショット時は 2.5 倍
+var damage = weapon_resource.damage  # 例: AK-47 = 36.0
+if is_headshot:
+    damage *= 2.5  # 90.0
+```
+
+#### シグナル
+
+```gdscript
+# WeaponComponent から発火
+signal hit_detected(target: Node3D, hit_point: Vector3, is_headshot: bool)
+
+# 使用例
+character.weapon.hit_detected.connect(_on_hit)
+func _on_hit(target: Node3D, hit_point: Vector3, is_headshot: bool) -> void:
+    if is_headshot:
+        show_headshot_indicator()
+```
+
+#### RayCast設定
+
+| パラメータ | 値 | 説明 |
+|------------|-----|------|
+| target_position | (0, 0, -effective_range) | 武器の有効射程 |
+| collision_mask | 1 | キャラクターレイヤー |
+| exclude | owner_character | 自分自身を除外 |
 
 ### MuzzleFlash
 
@@ -734,6 +790,42 @@ var list: PackedStringArray = character.get_animation_list()
 
 遷移は `locomotion_changed` シグナル経由で自動発火するため、WASD入力・ドロワーパス移動の両方で同じクロスフェードが適用される。
 
+## チーム
+
+キャラクターのチーム所属とチーム判定。射撃時のダメージ判定に使用。
+
+### Team Enum
+
+| 値 | 定数 | 説明 |
+|----|------|------|
+| 0 | NONE | チームなし（中立） |
+| 1 | PLAYER | プレイヤーチーム |
+| 2 | ENEMY | 敵チーム |
+
+### API
+
+```gdscript
+# エクスポートプロパティとして設定
+@export var team: Team = Team.NONE
+
+# 対象が敵チームかどうか判定
+var is_enemy: bool = character.is_enemy_of(other_character)
+```
+
+### 使用例
+
+```gdscript
+# チーム設定
+character1.team = CharacterBase.Team.PLAYER
+character2.team = CharacterBase.Team.ENEMY
+
+# 敵判定（射撃時に自動で使用される）
+if character1.is_enemy_of(character2):
+    # character2 は敵 → ダメージを与える
+```
+
+---
+
 ## HP
 
 ```gdscript
@@ -748,6 +840,25 @@ var ratio: float = character.get_health_ratio()
 
 # HPを取得
 var hp: float = character.get_health()
+```
+
+### 死亡時の動作
+
+HP が 0 以下になると `died` シグナルが発火し、以下の処理が自動実行される:
+
+1. **移動停止**: `movement.stop()`
+2. **IK無効化**: `weapon.disable_ik()`
+3. **視界(FoW)無効化**: `vision.disable()` - 視界ポリゴンがクリアされる
+4. **コライダー無効化**: `CollisionShape3D.disabled = true` - 弾が貫通するようになる
+5. **死亡アニメーション再生**: `rifle_death` 等の武器タイプに応じたアニメーション
+
+```gdscript
+# 死亡シグナルをハンドリング
+character.died.connect(_on_character_died)
+
+func _on_character_died(killer: Node3D) -> void:
+    print("キャラクターが死亡しました")
+    # 死亡処理（スコア加算など）
 ```
 
 ## アクション
@@ -777,9 +888,35 @@ var polygon: PackedVector3Array = character.get_vision_polygon()
 
 # 壁ヒットポイントを取得
 var hits: PackedVector3Array = character.get_wall_hit_points()
+
+# 視界を無効化（死亡時に自動呼び出し）
+character.vision.disable()
+
+# 視界を有効化
+character.vision.enable()
+```
+
+### VisionComponent API
+
+```gdscript
+# 視界を無効化
+# - 更新処理を停止
+# - 視界ポリゴンをクリア
+# - vision_updated/wall_hit_updated シグナルで空配列を通知
+func disable() -> void
+
+# 視界を有効化
+# - 更新処理を再開
+# - 即座に視界を再計算
+func enable() -> void
+
+# 即座に視界を更新
+func force_update() -> void
 ```
 
 ## シグナル
+
+### CharacterBase シグナル
 
 ```gdscript
 signal path_completed
@@ -790,4 +927,26 @@ signal weapon_changed(weapon_id: int)
 signal locomotion_changed(state: int)
 signal action_started(action_type: int)
 signal action_completed(action_type: int)
+```
+
+### WeaponComponent シグナル
+
+```gdscript
+# ヒット検出時に発火
+signal hit_detected(target: Node3D, hit_point: Vector3, is_headshot: bool)
+```
+
+### AnimationComponent シグナル
+
+```gdscript
+# 死亡アニメーション完了時に発火
+signal death_animation_finished
+```
+
+### VisionComponent シグナル
+
+```gdscript
+# 視界更新時に発火
+signal vision_updated(visible_points: PackedVector3Array)
+signal wall_hit_updated(hit_points: PackedVector3Array)
 ```

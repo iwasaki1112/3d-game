@@ -208,3 +208,18 @@ func set_view_distance(distance: float) -> void:
 ## 即座に視界を更新
 func force_update() -> void:
 	_calculate_shadow_cast_vision()
+
+
+## 視界を無効化（死亡時など）
+func disable() -> void:
+	set_process(false)
+	_visible_polygon.clear()
+	_wall_hit_points.clear()
+	vision_updated.emit(_visible_polygon)
+	wall_hit_updated.emit(_wall_hit_points)
+
+
+## 視界を有効化
+func enable() -> void:
+	set_process(true)
+	force_update()

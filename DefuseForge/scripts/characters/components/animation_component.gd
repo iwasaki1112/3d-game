@@ -5,6 +5,7 @@ extends Node
 ## AnimationTree、上半身/下半身ブレンド、上半身エイミングを担当
 
 signal animation_finished(anim_name: String)
+signal death_animation_finished
 
 ## 移動状態
 enum LocomotionState { IDLE, WALK, RUN }
@@ -464,3 +465,53 @@ func _setup_upper_body_modifier() -> void:
 
 	# Skeleton3Dの子として追加
 	skeleton.add_child(_upper_body_modifier)
+
+
+## 死亡アニメーションを再生
+## @param weapon_type_param: 武器タイプ（0=NONE, 1=RIFLE, 2=PISTOL）
+func play_death_animation(weapon_type_param: int = 1) -> void:
+	if anim_player == null:
+		death_animation_finished.emit()
+		return
+
+	var weapon_name = WEAPON_TYPE_NAMES.get(weapon_type_param, "rifle")
+	var death_anim_name = "%s_dying" % weapon_name
+
+	# フォールバック検索（rifle_death, rifle_dying 両方対応）
+	var fallback_anims = [death_anim_name, "%s_death" % weapon_name, "rifle_dying", "rifle_death", "dying", "death"]
+	var found_anim = ""
+
+	for anim_name in fallback_anims:
+		if anim_player.has_animation(anim_name):
+			found_anim = anim_name
+			break
+
+	if found_anim.is_empty():
+		# デバッグ: 利用可能なアニメーションを表示
+		var available_anims = anim_player.get_animation_list()
+		print("[AnimationComponent] Available animations: %s" % str(available_anims))
+		push_warning("[AnimationComponent] No death animation found")
+		death_animation_finished.emit()
+		return
+
+	# AnimationTreeを無効化
+	if anim_tree and anim_tree.active:
+		anim_tree.active = false
+
+	# 上半身回転モディファイアを無効化
+	if _upper_body_modifier:
+		_upper_body_modifier.active = false
+
+	# ループモードを無効化
+	var anim = anim_player.get_animation(found_anim)
+	if anim:
+		anim.loop_mode = Animation.LOOP_NONE
+
+	# 再生
+	anim_player.play(found_anim, 0.1)  # 短めのブレンド
+
+	print("[AnimationComponent] Playing death animation: %s" % found_anim)
+
+	# 終了を待機
+	await anim_player.animation_finished
+	death_animation_finished.emit()

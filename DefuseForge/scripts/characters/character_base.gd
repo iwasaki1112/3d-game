@@ -4,6 +4,9 @@ extends CharacterBody3D
 ## キャラクター基底クラス
 ## コンポーネントを統合し、シンプルなAPIを提供
 
+## チーム定義
+enum Team { NONE = 0, PLAYER = 1, ENEMY = 2 }
+
 const CharacterActionState = preload("res://scripts/resources/action_state.gd")
 const MovementComponentScript = preload("res://scripts/characters/components/movement_component.gd")
 const AnimationComponentScript = preload("res://scripts/characters/components/animation_component.gd")
@@ -29,6 +32,9 @@ signal action_completed(action_type: int)
 
 @export_group("HP設定")
 @export var max_health: float = 100.0
+
+@export_group("チーム設定")
+@export var team: Team = Team.NONE
 
 ## コンポーネント参照
 var movement: Node  # MovementComponent
@@ -155,7 +161,7 @@ func _setup_components() -> void:
 		add_child(weapon)
 
 	if skeleton:
-		weapon.setup(skeleton)
+		weapon.setup(skeleton, self)
 
 	# スケルトン更新シグナルを接続
 	if skeleton:
@@ -342,6 +348,21 @@ func get_health() -> float:
 
 
 ## ========================================
+## チーム API
+## ========================================
+
+## 対象が敵チームかどうか判定
+## @param other: 判定対象のキャラクター
+## @return: 敵チームならtrue
+func is_enemy_of(other: CharacterBase) -> bool:
+	if other == null:
+		return false
+	if team == Team.NONE or other.team == Team.NONE:
+		return false
+	return team != other.team
+
+
+## ========================================
 ## アクション API
 ## ========================================
 
@@ -400,6 +421,39 @@ func _on_died(killer: Node3D) -> void:
 	# 移動停止
 	if movement:
 		movement.stop()
+
+	# IKを無効化
+	if weapon:
+		weapon.disable_ik()
+
+	# 視界（FoW）を無効化
+	if vision:
+		vision.disable()
+
+	# コライダーを無効化
+	_disable_collision()
+
+	# 死亡アニメーション再生
+	_play_death_animation()
+
+
+## コライダーを無効化（死亡時）
+func _disable_collision() -> void:
+	var collision_shape = get_node_or_null("CollisionShape3D")
+	if collision_shape:
+		collision_shape.disabled = true
+
+
+## 死亡アニメーションを再生
+func _play_death_animation() -> void:
+	if animation == null:
+		return
+
+	var current_weapon_type = 1  # デフォルト: RIFLE
+	if weapon and weapon.weapon_resource:
+		current_weapon_type = weapon.weapon_resource.weapon_type
+
+	animation.play_death_animation(current_weapon_type)
 
 
 func _on_damaged(amount: float, attacker: Node3D, is_headshot: bool) -> void:

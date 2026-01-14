@@ -112,8 +112,10 @@ func _ready() -> void:
 	var char2 = get_node_or_null("CharacterBody2") as CharacterBase
 	if char1:
 		characters.append(char1)
+		char1.team = CharacterBase.Team.PLAYER
 	if char2:
 		characters.append(char2)
+		char2.team = CharacterBase.Team.ENEMY
 
 	# デフォルトは1体目を操作
 	if characters.size() > 0:
@@ -157,10 +159,10 @@ func _ready() -> void:
 	for character in characters:
 		character.setup_outline_camera(camera)
 
-	# 2体目にも武器を装備してIKオフセットを適用
+	# 2体目にも武器を装備してIKオフセットを適用（Vanguardのまま）
 	for i in range(1, characters.size()):
 		characters[i].set_weapon(_weapon_id_string_to_int(current_weapon_id))
-		CharacterAPIScript.apply_character_ik_from_resource(characters[i], current_character_id)
+		CharacterAPIScript.apply_character_ik_from_resource(characters[i], "vanguard")
 
 	# 2体目のIK値も更新（1フレーム待ってから）
 	await get_tree().process_frame

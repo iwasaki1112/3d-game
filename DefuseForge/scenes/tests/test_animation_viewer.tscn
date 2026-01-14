@@ -39,8 +39,7 @@ size = Vector3(20, 0.1, 20)
 script = ExtResource("1_viewer")
 
 [node name="CharacterBody" type="CharacterBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0.025, 0)
-collision_layer = 1
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0.025, 0)
 collision_mask = 3
 script = ExtResource("4_character_base")
 
@@ -51,8 +50,7 @@ shape = SubResource("CapsuleShape3D_char")
 [node name="CharacterModel" parent="CharacterBody" instance=ExtResource("3_character")]
 
 [node name="CharacterBody2" type="CharacterBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0.025, 0)
-collision_layer = 1
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 2, 0.025, 0)
 collision_mask = 3
 script = ExtResource("4_character_base")
 
@@ -105,6 +103,8 @@ spot_range = 12.0
 spot_angle = 35.0
 
 [node name="Floor" type="StaticBody3D" parent="."]
+collision_layer = 2
+collision_mask = 0
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Floor"]
 mesh = SubResource("PlaneMesh_1")
