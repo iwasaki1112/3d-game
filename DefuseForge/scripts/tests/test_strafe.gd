@@ -8,6 +8,7 @@ extends Node3D
 @onready var character: CharacterBase = $CharacterBody
 
 var _strafe_enabled: bool = true
+var _twist_disabled: bool = false  # 限界超えでリセット中かどうか
 
 # UI
 var _info_label: Label
@@ -104,12 +105,15 @@ func _physics_process(_delta: float) -> void:
 	_update_ui(input_dir, is_running)
 
 
+## 上半身回転の限界角度（度）
+const UPPER_BODY_MAX_ANGLE: float = 90.0
+
+
 func _update_facing_direction() -> void:
-	# スクリーン中心からのマウスオフセットを計算
-	var viewport_size = get_viewport().get_visible_rect().size
-	var viewport_center = viewport_size / 2.0
+	# キャラクターのスクリーン座標からのマウスオフセットを計算
+	var char_screen_pos = camera.unproject_position(character.global_position)
 	var mouse_pos = get_viewport().get_mouse_position()
-	var screen_offset = mouse_pos - viewport_center
+	var screen_offset = mouse_pos - char_screen_pos
 
 	# カメラの右方向と前方向（XZ平面上）を取得
 	var cam_right = camera.global_transform.basis.x
@@ -121,31 +125,39 @@ func _update_facing_direction() -> void:
 	cam_forward = cam_forward.normalized() if cam_forward.length_squared() > 0.001 else Vector3.FORWARD
 
 	# スクリーンオフセットをワールド方向に変換
-	# +Z前方座標系に合わせて調整:
-	# - screen X はそのまま
-	# - screen Y を反転（前後を正しくマッピング）
 	var world_dir = cam_right * screen_offset.x + cam_forward * (-screen_offset.y)
 
 	if world_dir.length_squared() > 0.001:
 		world_dir = world_dir.normalized()
 
-		# キャラクターをこの方向に向ける
-		# look_atは-Zをターゲットに向けるが、このプロジェクトでは+Zが前方
-		# そのため反対方向を指定
-		var target = character.global_position - world_dir
-		target.y = character.global_position.y
-		character.look_at(target, Vector3.UP)
+		# キャラクターの現在の前方向（+Z）
+		var body_forward = character.global_transform.basis.z
+		body_forward.y = 0
+		body_forward = body_forward.normalized()
 
-		# ストレイフモードの視線方向 = キャラクターの前方向（+Z local）
-		var actual_facing = character.global_transform.basis.z
-		actual_facing.y = 0
-		actual_facing = actual_facing.normalized()
-		character.movement._facing_direction = actual_facing
+		# マウス方向との角度差を計算（ラジアン）
+		var angle_diff = atan2(
+			body_forward.cross(world_dir).y,
+			body_forward.dot(world_dir)
+		)
+		var angle_deg = rad_to_deg(angle_diff)
 
-		# デバッグ出力（必要時のみ有効化）
-		#if Engine.get_process_frames() % 120 == 0:
-		#	print("[TestStrafe] facing: (%.2f, %.2f), rot: %.1f deg" % [
-		#		actual_facing.x, actual_facing.z, rad_to_deg(character.rotation.y)])
+		# ヒステリシス付きの限界処理
+		# 限界を超えたらリセット状態に入る
+		if abs(angle_deg) > UPPER_BODY_MAX_ANGLE:
+			_twist_disabled = true
+		# リセット状態では70度以下になるまで追従を再開しない
+		elif _twist_disabled and abs(angle_deg) < 70.0:
+			_twist_disabled = false
+
+		# 適用
+		if _twist_disabled:
+			character.animation.apply_spine_rotation(0.0, 0.0)
+		else:
+			character.animation.apply_spine_rotation(angle_deg, 0.0)
+
+		# ストレイフモードのfacing_directionはマウス方向を維持
+		character.movement._facing_direction = world_dir
 
 
 func _update_ui(input_dir: Vector3, is_running: bool) -> void:
