@@ -3,12 +3,16 @@ extends Node3D
 ## ストレイフ（8方向移動）テストシーン
 ## WASD移動 + マウスで視線方向を制御
 ## Shiftで走る（走り中はストレイフ無効）
+## FoW（視界）システム統合
+
+const FogOfWarSystemScript = preload("res://scripts/systems/fog_of_war_system.gd")
 
 @onready var camera: Camera3D = $Camera3D
 @onready var character: CharacterBase = $CharacterBody
 
 var _strafe_enabled: bool = true
 var _twist_disabled: bool = false  # 限界超えでリセット中かどうか
+var fog_of_war_system: Node3D = null
 
 # UI
 var _info_label: Label
@@ -27,8 +31,26 @@ func _ready() -> void:
 		var facing = character.global_transform.basis.z
 		character.enable_strafe(facing)
 
+	# FoWシステムをセットアップ
+	_setup_fog_of_war()
+
 	print("[TestStrafe] Ready")
 	print("[TestStrafe] WASD: Move, Mouse: Look direction, Shift: Run")
+
+
+func _setup_fog_of_war() -> void:
+	# FogOfWarSystemを作成
+	fog_of_war_system = Node3D.new()
+	fog_of_war_system.set_script(FogOfWarSystemScript)
+	fog_of_war_system.name = "FogOfWarSystem"
+	add_child(fog_of_war_system)
+
+	# 1フレーム待ってからビジョンを登録
+	await get_tree().process_frame
+
+	if character and character.vision:
+		fog_of_war_system.register_vision(character.vision)
+		print("[TestStrafe] Vision registered with FogOfWarSystem")
 
 
 func _setup_ui() -> void:
