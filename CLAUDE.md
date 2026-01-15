@@ -4,10 +4,11 @@
 - **エンジン**: Godot 4.5.1
 - **プロジェクトパス**: `DefuseForge/`
 - **言語**: GDScript
-- **メインシーン**: `scenes/tests/test_animation_viewer.tscn`
 
 ## 現在の状態
-開発途中。**test_animation_viewer** のみ稼働中。
+開発途中。テストシーン：
+- `scenes/tests/test_animation_viewer.tscn` - アニメーション確認用
+- `scenes/tests/test_path_drawer.tscn` - パス描画・移動確認用
 
 ## ドキュメント（必要時に参照）
 `docs/godot/` 配下：
