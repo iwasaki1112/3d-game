@@ -4,6 +4,8 @@ extends Node
 ## 視界管理コンポーネント（シャドウキャスト方式）
 ## 壁セグメントの端点を利用した安定した可視性計算
 
+const VisionMath = preload("res://scripts/utils/vision_math.gd")
+
 signal vision_updated(visible_points: PackedVector3Array)
 signal wall_hit_updated(hit_points: PackedVector3Array)
 
@@ -179,13 +181,9 @@ func _get_box_corners(wall_transform: Transform3D, shape_transform: Transform3D,
 	return corners
 
 
-## 角度を-PI〜PIにラップ
+## 角度を-PI〜PIにラップ（VisionMathに委譲）
 func _wrap_angle(angle: float) -> float:
-	while angle > PI:
-		angle -= TAU
-	while angle < -PI:
-		angle += TAU
-	return angle
+	return VisionMath.wrap_angle(angle)
 
 
 ## 視線方向を取得（AnimationComponentの回転を反映）

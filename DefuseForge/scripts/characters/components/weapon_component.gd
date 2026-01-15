@@ -4,6 +4,8 @@ extends Node
 ## 武器管理コンポーネント
 ## 武器装着、リコイル、左手IK、ヒット検出を担当
 
+const BoneNameRegistry = preload("res://scripts/utils/bone_name_registry.gd")
+
 signal weapon_changed(weapon_id: int)
 signal hit_detected(target: Node3D, hit_point: Vector3, is_headshot: bool)
 
@@ -126,13 +128,8 @@ func _attach_weapon() -> void:
 	if skeleton == null or weapon_resource == null:
 		return
 
-	# 右手ボーンを検索（Humanoid名 + ARP名）
-	var right_hand_bones := ["RightHand", "c_hand_ik.r", "hand.r", "c_hand_fk.r"]
-	var bone_idx := -1
-	for bone_name in right_hand_bones:
-		bone_idx = skeleton.find_bone(bone_name)
-		if bone_idx >= 0:
-			break
+	# 右手ボーンを検索（BoneNameRegistry使用）
+	var bone_idx := BoneNameRegistry.find_right_hand_bone(skeleton)
 
 	if bone_idx < 0:
 		push_warning("[WeaponComponent] Right hand bone not found")
@@ -229,25 +226,15 @@ func _setup_left_hand_ik() -> void:
 	# 元の位置を保存
 	_left_hand_original_position = left_hand_target.position
 
-	# ティップボーン（手）を検索（Humanoid名 + ARP名）
-	var tip_bone_name := ""
-	var tip_bone_candidates := ["LeftHand", "hand.l", "c_hand_ik.l", "c_hand_fk.l"]
-	for bone_name in tip_bone_candidates:
-		if skeleton.find_bone(bone_name) >= 0:
-			tip_bone_name = bone_name
-			break
+	# ティップボーン（手）を検索（BoneNameRegistry使用）
+	var tip_bone_name := BoneNameRegistry.find_left_hand_bone_name(skeleton)
 
 	if tip_bone_name.is_empty():
 		push_warning("[WeaponComponent] Left hand tip bone not found")
 		return
 
-	# ルートボーン（上腕）を検索（Humanoid名 + ARP名）
-	var root_bone_name := ""
-	var root_bone_candidates := ["LeftUpperArm", "arm.l", "upperarm.l", "arm_stretch.l", "c_arm_ik.l", "shoulder.l"]
-	for bone_name in root_bone_candidates:
-		if skeleton.find_bone(bone_name) >= 0:
-			root_bone_name = bone_name
-			break
+	# ルートボーン（上腕）を検索（BoneNameRegistry使用）
+	var root_bone_name := BoneNameRegistry.find_left_upper_arm_bone_name(skeleton)
 
 	if root_bone_name.is_empty():
 		push_warning("[WeaponComponent] Left arm root bone not found")

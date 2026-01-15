@@ -11,7 +11,7 @@ const CharacterAPI = preload("res://scripts/api/character_api.gd")
 CharacterAPI.play_animation(character, "idle", 0.3)
 
 # キャラクター切り替え
-CharacterAPI.switch_character_model(character, "shade")
+CharacterAPI.switch_character_model(character, "phantom")
 ```
 
 ## Animation API
@@ -32,7 +32,7 @@ static func play_animation(character: CharacterBase, animation_name: String, ble
 ```gdscript
 static func setup_animations(character: CharacterBase, character_id: String) -> void
 ```
-キャラクターIDに基づいてアニメーションを自動セットアップ。アニメーション共有（shade/phantom→vanguard）を自動処理。
+キャラクターIDに基づいてアニメーションを自動セットアップ。アニメーション共有（phantom→vanguard）を自動処理。
 
 ### copy_animations_from
 ```gdscript
@@ -60,16 +60,16 @@ static func switch_character_model(
 
 **パラメータ:**
 - `character`: 対象CharacterBase
-- `character_id`: "vanguard", "shade", "phantom"等
+- `character_id`: "vanguard", "phantom"等
 - `weapon_id`: 切り替え後の武器ID（-1で現在の武器を維持）
 
 **使用例:**
 ```gdscript
 # 武器を維持してキャラクター切り替え
-CharacterAPI.switch_character_model(player, "shade")
+CharacterAPI.switch_character_model(player, "phantom")
 
 # 武器も指定して切り替え
-CharacterAPI.switch_character_model(player, "phantom", WeaponRegistry.WeaponId.M4A1)
+CharacterAPI.switch_character_model(player, "vanguard", WeaponRegistry.WeaponId.M4A1)
 ```
 
 ## Weapon IK Tuning API
@@ -120,8 +120,7 @@ static func set_laser_active(character: CharacterBase, active: bool) -> void
 
 ```gdscript
 const ANIMATION_SOURCE := {
-    "shade": "vanguard",    # shadeはvanguardのアニメーションを使用
-    "phantom": "vanguard"   # phantomもvanguardのアニメーションを使用
+    "phantom": "vanguard"   # phantomはvanguardのアニメーションを使用
 }
 ```
 
@@ -337,3 +336,144 @@ func _setup_fog_of_war() -> void:
 1. **CharacterAPIを経由**: 直接`character.weapon.xxx()`を呼ばず、CharacterAPIを使用
 2. **nullチェック内蔵**: すべてのAPIメソッドはnullチェックを行い、警告を出力
 3. **静的メソッド**: すべてのAPIは`static func`で、第一引数にcharacterを取る
+
+---
+
+## ユーティリティクラス
+
+### BoneNameRegistry
+
+複数のスケルトン規約（Humanoid、ARP、Blender Rigify）に対応した骨名検索。
+
+```gdscript
+# 右手骨のインデックスを検索
+var bone_idx = BoneNameRegistry.find_right_hand_bone(skeleton)
+
+# 左手骨名を検索
+var bone_name = BoneNameRegistry.find_left_hand_bone_name(skeleton)
+
+# 上半身骨のリストを取得
+var upper_bones = BoneNameRegistry.get_upper_body_bones(skeleton)
+
+# 骨名が上半身かどうか判定
+var is_upper = BoneNameRegistry.is_upper_body_bone("Spine")
+```
+
+**対応規約:**
+| 規約 | 例 |
+|------|-----|
+| Humanoid/Mixamo | `RightHand`, `LeftUpperArm` |
+| Blender Rigify | `hand.r`, `arm.l` |
+| Auto-Rig Pro | `c_hand_ik.r`, `c_arm_ik.l` |
+
+### RaycastHelper
+
+レイキャスト処理を簡素化するユーティリティ。
+
+```gdscript
+# 基本レイキャスト
+var result = RaycastHelper.cast_ray(space_state, from, to, mask, exclude)
+
+# カメラからのレイキャスト
+var result = RaycastHelper.cast_ray_from_camera(camera, mouse_pos, space_state, mask)
+
+# 視線遮蔽チェック
+var blocked = RaycastHelper.is_line_of_sight_blocked(space_state, eye, target, wall_mask)
+
+# 地面との交点
+var point = RaycastHelper.get_ground_intersection(camera, mouse_pos, ground_height)
+```
+
+### VisionMath
+
+視界計算に使用する数学関数。
+
+```gdscript
+# 角度を -PI 〜 PI にラップ
+var wrapped = VisionMath.wrap_angle(angle)
+
+# FOV内判定
+var in_fov = VisionMath.is_in_fov(forward, to_target, fov_degrees)
+
+# 方向ベクトルから回転角度
+var rotation = VisionMath.direction_to_rotation(direction)
+```
+
+### PositionHelper
+
+位置計算ユーティリティ。
+
+```gdscript
+# 目線位置を取得
+var eye_pos = PositionHelper.get_eye_position(character_pos, 1.5)
+
+# 胴体位置を取得
+var body_pos = PositionHelper.get_body_position(target_pos)
+
+# 水平距離
+var dist = PositionHelper.get_horizontal_distance(from, to)
+```
+
+### AnimationFallback
+
+アニメーション候補のフォールバック検索。
+
+```gdscript
+# 候補リストから存在するアニメーションを検索
+var anim = AnimationFallback.find_animation(anim_player, candidates, default)
+
+# 死亡アニメーションを検索
+var death = AnimationFallback.get_death_animation(anim_player, "rifle")
+```
+
+---
+
+## リソース定義
+
+### CharacterResource
+
+キャラクターの設定データ。
+
+| プロパティ | 型 | 説明 |
+|-----------|-----|------|
+| `character_id` | String | キャラクター識別子 |
+| `display_name` | String | 表示名 |
+| `model_path` | String | モデルシーンパス |
+| `weapon_attach_offset` | Vector3 | 武器装着位置オフセット |
+| `weapon_attach_rotation` | Vector3 | 武器装着回転オフセット |
+| `left_hand_offset` | Vector3 | 左手IKオフセット |
+| `left_elbow_offset` | Vector3 | 左肘ポールオフセット |
+| `max_health` | float | 最大HP |
+| `move_speed` | float | 移動速度 |
+
+### WeaponResource
+
+武器の設定データ。
+
+| プロパティ | 型 | 説明 |
+|-----------|-----|------|
+| `weapon_id` | int | WeaponRegistry.WeaponId |
+| `display_name` | String | 表示名 |
+| `weapon_type` | int | WeaponRegistry.WeaponType |
+| `scene_path` | String | 武器シーンパス |
+| `price` | int | 購入価格 |
+| `damage` | float | 基本ダメージ |
+| `fire_rate` | float | 発射速度 |
+| `effective_range` | float | 有効射程 |
+| `headshot_multiplier` | float | ヘッドショット倍率 |
+| `bodyshot_multiplier` | float | ボディショット倍率 |
+| `magazine_size` | int | マガジン容量 |
+| `reserve_ammo` | int | 予備弾薬数 |
+| `attach_position` | Vector3 | 装着位置 |
+| `attach_rotation` | Vector3 | 装着回転 |
+| `left_hand_ik_enabled` | bool | 左手IK有効 |
+| `left_hand_ik_position` | Vector3 | 左手IK位置 |
+| `left_elbow_pole_x/y/z` | float | 肘ポール位置 |
+
+---
+
+## 関連ドキュメント
+
+- [architecture.md](./architecture.md) - アーキテクチャ概要
+- [skeleton-modifier-patterns.md](./skeleton-modifier-patterns.md) - SkeletonModifier3D パターン
+- [testing-guide.md](./testing-guide.md) - テストガイド

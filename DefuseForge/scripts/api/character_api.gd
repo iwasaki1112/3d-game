@@ -11,7 +11,6 @@ extends RefCounted
 ## アニメーション共有マッピング（同じリグを使用するキャラクター）
 ## All characters use vanguard's animations (same ARP rig)
 const ANIMATION_SOURCE := {
-	"shade": "vanguard",
 	"phantom": "vanguard"
 }
 
@@ -179,7 +178,7 @@ static func setup_animations(character: CharacterBase, character_id: String) -> 
 ## キャラクターモデルを切り替える
 ## 古いモデル削除→新モデル読み込み→コンポーネント再初期化→武器再装備
 ## @param character: 対象キャラクター
-## @param character_id: 新しいキャラクターID（例: "shade", "phantom", "vanguard"）
+## @param character_id: 新しいキャラクターID（例: "phantom", "vanguard"）
 ## @param weapon_id: 切り替え後に装備する武器ID（-1で現在の武器を維持）
 ## @return: 成功時true
 static func switch_character_model(

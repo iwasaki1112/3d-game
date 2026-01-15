@@ -4,6 +4,8 @@ extends Node
 ## Mouse-based character rotation component
 ## Click near a character and drag to rotate them to face the mouse position
 
+const RaycastHelper = preload("res://scripts/utils/raycast_helper.gd")
+
 signal rotation_started()
 signal rotation_ended()
 signal clicked()  ## Emitted on short click (not long-press) on character
@@ -112,21 +114,17 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _is_clicking_on_character(mouse_pos: Vector2) -> bool:
-	var ray_origin = _camera.project_ray_origin(mouse_pos)
-	var ray_direction = _camera.project_ray_normal(mouse_pos)
-	var ray_end = ray_origin + ray_direction * 100.0
-
-	# Raycast to check direct character hit
+	# RaycastHelper を使用してキャラクターヒット判定
 	var space_state = _character.get_world_3d().direct_space_state
-	var query = PhysicsRayQueryParameters3D.create(ray_origin, ray_end)
-	query.collision_mask = character_collision_mask
-	var result = space_state.intersect_ray(query)
+	var result = RaycastHelper.cast_ray_from_camera(
+		_camera, mouse_pos, space_state, character_collision_mask
+	)
 
 	if result and result.collider == _character:
 		return true
 
 	# Proximity fallback - allow clicks near character
-	var intersection = _ground_plane.intersects_ray(ray_origin, ray_direction)
+	var intersection = RaycastHelper.get_ground_intersection(_camera, mouse_pos, ground_plane_height)
 	if intersection:
 		var click_pos = intersection as Vector3
 		var char_pos = _character.global_position
@@ -138,14 +136,11 @@ func _is_clicking_on_character(mouse_pos: Vector2) -> bool:
 
 ## Check if clicking on ANY character (not just this one) - for clicked_empty detection
 func _is_clicking_on_any_character(mouse_pos: Vector2) -> bool:
-	var ray_origin = _camera.project_ray_origin(mouse_pos)
-	var ray_direction = _camera.project_ray_normal(mouse_pos)
-	var ray_end = ray_origin + ray_direction * 100.0
-
+	# RaycastHelper を使用
 	var space_state = _character.get_world_3d().direct_space_state
-	var query = PhysicsRayQueryParameters3D.create(ray_origin, ray_end)
-	query.collision_mask = character_collision_mask
-	var result = space_state.intersect_ray(query)
+	var result = RaycastHelper.cast_ray_from_camera(
+		_camera, mouse_pos, space_state, character_collision_mask
+	)
 
 	# Hit any character
 	if result and result.collider is CharacterBody3D:
@@ -155,10 +150,8 @@ func _is_clicking_on_any_character(mouse_pos: Vector2) -> bool:
 
 
 func _rotate_character_to_mouse(mouse_pos: Vector2) -> void:
-	var ray_origin = _camera.project_ray_origin(mouse_pos)
-	var ray_direction = _camera.project_ray_normal(mouse_pos)
-
-	var intersection = _ground_plane.intersects_ray(ray_origin, ray_direction)
+	# RaycastHelper を使用して地面との交点を取得
+	var intersection = RaycastHelper.get_ground_intersection(_camera, mouse_pos, ground_plane_height)
 	if intersection == null:
 		return
 

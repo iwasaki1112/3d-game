@@ -30,6 +30,8 @@ var skeleton: Skeleton3D
 var _upper_body_modifier: Node  # UpperBodyRotationModifier
 
 const UpperBodyRotationModifierClass = preload("res://scripts/utils/upper_body_rotation_modifier.gd")
+const AnimationFallback = preload("res://scripts/utils/animation_fallback.gd")
+const BoneNameRegistry = preload("res://scripts/utils/bone_name_registry.gd")
 
 ## 状態
 var locomotion_state: LocomotionState = LocomotionState.IDLE
@@ -258,18 +260,8 @@ func _setup_animation_tree(model: Node3D) -> void:
 func _setup_upper_body_filter(blend_node: AnimationNodeBlend2) -> void:
 	blend_node.filter_enabled = true
 
-	var upper_body_bones: Array[String] = []
-
-	# スケルトンから上半身ボーンを動的に収集
-	for i in range(skeleton.get_bone_count()):
-		var bone_name = skeleton.get_bone_name(i)
-		var lower_name = bone_name.to_lower()
-
-		if "spine" in lower_name or "neck" in lower_name or "head" in lower_name \
-			or "shoulder" in lower_name or "arm" in lower_name or "hand" in lower_name \
-			or "thumb" in lower_name or "index" in lower_name or "middle" in lower_name \
-			or "ring" in lower_name or "pinky" in lower_name:
-			upper_body_bones.append(bone_name)
+	# BoneNameRegistryを使用して上半身ボーンを取得
+	var upper_body_bones := BoneNameRegistry.get_upper_body_bones(skeleton)
 
 	# Armatureプレフィックスを考慮したパスを構築
 	var armature_path = ""
@@ -459,16 +451,9 @@ func play_death_animation(weapon_type_param: int = 1) -> void:
 		return
 
 	var weapon_name = WEAPON_TYPE_NAMES.get(weapon_type_param, "rifle")
-	var death_anim_name = "%s_dying" % weapon_name
 
-	# フォールバック検索（rifle_death, rifle_dying 両方対応）
-	var fallback_anims = [death_anim_name, "%s_death" % weapon_name, "rifle_dying", "rifle_death", "dying", "death"]
-	var found_anim = ""
-
-	for anim_name in fallback_anims:
-		if anim_player.has_animation(anim_name):
-			found_anim = anim_name
-			break
+	# AnimationFallback を使用してフォールバック検索
+	var found_anim = AnimationFallback.get_death_animation(anim_player, weapon_name)
 
 	if found_anim.is_empty():
 		push_warning("[AnimationComponent] No death animation found")

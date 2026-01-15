@@ -23,7 +23,8 @@ model_path = "res://assets/characters/{character_id}/{character_id}.glb"
 `scripts/registries/character_registry.gd`の`CHARACTER_PATHS`に追加：
 ```gdscript
 const CHARACTER_PATHS := {
-    "shade": "res://assets/characters/shade/shade.tres",
+    "phantom": "res://assets/characters/phantom/phantom.tres",
+    "vanguard": "res://assets/characters/vanguard/vanguard.tres",
     "{character_id}": "res://assets/characters/{character_id}/{character_id}.tres"
 }
 ```
@@ -32,7 +33,6 @@ const CHARACTER_PATHS := {
 `scripts/api/character_api.gd`の`ANIMATION_SOURCE`に追加：
 ```gdscript
 const ANIMATION_SOURCE := {
-    "shade": "vanguard",
     "phantom": "vanguard",
     "{character_id}": "vanguard"  # vanguardのアニメーションを使用
 }
@@ -44,7 +44,6 @@ const ANIMATION_SOURCE := {
 ## キャラクターアセット構造
 ```
 assets/characters/
-├── shade/shade.glb     # vanguardとアニメーション共有
 ├── phantom/phantom.glb # vanguardとアニメーション共有
 └── vanguard/vanguard.glb # メインキャラクター（アニメーション元）
 ```

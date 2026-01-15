@@ -10,12 +10,16 @@
 - `scenes/tests/test_animation_viewer.tscn` - アニメーション確認用
 - `scenes/tests/test_path_drawer.tscn` - パス描画・移動確認用
 
-## ドキュメント（必要時に参照）
+## ドキュメント
 `docs/godot/` 配下：
-- `character-api.md` - CharacterBase/CharacterAPI（選択、回転、移動、武器、アニメーション、IK、レーザー、視界、FogOfWar、レジストリ、**PlayerManager**）
+- `architecture.md` - システムアーキテクチャ概要、コンポーネント依存関係、シグナルフロー
+- `character-api.md` - CharacterBase/CharacterAPI（選択、回転、移動、武器、アニメーション、IK、レーザー、視界、FogOfWar、レジストリ、ユーティリティクラス、リソース定義）
 - `skeleton-modifier-patterns.md` - SkeletonModifier3D、上半身回転、IK実行順序
+- `testing-guide.md` - テストシーンの使い方、デバッグツール
 
-**重要**: 仕様追加・変更があった場合は `docs/godot/character-api.md` に定義を追記すること。
+**重要**:
+- 実装前に関連ドキュメントを読むこと（特に `architecture.md` と `character-api.md`）
+- 仕様追加・変更があった場合は `docs/godot/character-api.md` に定義を追記すること
 
 ## コマンド
 ```bash

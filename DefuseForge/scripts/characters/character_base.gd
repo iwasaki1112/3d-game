@@ -16,6 +16,11 @@ const VisionComponentScript = preload("res://scripts/characters/components/visio
 const OutlineComponentScript = preload("res://scripts/characters/components/outline_component.gd")
 const CharacterAPIScript = preload("res://scripts/api/character_api.gd")
 
+## ユーティリティクラス
+const VisionMath = preload("res://scripts/utils/vision_math.gd")
+const PositionHelper = preload("res://scripts/utils/position_helper.gd")
+const RaycastHelper = preload("res://scripts/utils/raycast_helper.gd")
+
 ## シグナル
 signal path_completed
 signal waypoint_reached(index: int)
@@ -558,32 +563,23 @@ func _is_in_field_of_view(target: CharacterBase) -> bool:
 	if distance > view_distance:
 		return false
 
-	# FOVチェック（XZ平面）
-	to_target.y = 0
+	# FOVチェック（VisionMath使用）
 	var forward = global_transform.basis.z  # +Zが前方
-	forward.y = 0
-
-	if to_target.length() < 0.01 or forward.length() < 0.01:
-		return true  # ほぼ同じ位置
-
-	var angle = rad_to_deg(forward.angle_to(to_target))
-	if angle > fov_degrees / 2.0:
+	if not VisionMath.is_in_fov(forward, to_target, fov_degrees):
 		return false
 
-	# レイキャストで遮蔽物チェック
+	# レイキャストで遮蔽物チェック（RaycastHelper + PositionHelper使用）
 	var space_state = get_world_3d().direct_space_state
-	var eye_pos = global_position + Vector3(0, vision.eye_height, 0)
-	var target_pos = target.global_position + Vector3(0, 1.0, 0)  # 対象の胴体あたり
+	var eye_pos = PositionHelper.get_eye_position(global_position, vision.eye_height)
+	var target_pos = PositionHelper.get_body_position(target.global_position)
 
-	var query = PhysicsRayQueryParameters3D.create(eye_pos, target_pos, vision.wall_collision_mask)
-	query.exclude = [get_rid(), target.get_rid()]
-	var result = space_state.intersect_ray(query)
-
-	if not result.is_empty():
-		return false
+	var exclude_rids: Array[RID] = [get_rid(), target.get_rid()]
+	var is_blocked = RaycastHelper.is_line_of_sight_blocked(
+		space_state, eye_pos, target_pos, vision.wall_collision_mask, exclude_rids
+	)
 
 	# 壁に当たらなければ視界内
-	return true
+	return not is_blocked
 
 
 ## ========================================

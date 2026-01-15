@@ -39,7 +39,6 @@ scripts/
 ```
 assets/
 ├── characters/
-│   ├── shade/shade.glb
 │   ├── phantom/phantom.glb
 │   └── vanguard/vanguard.glb
 └── weapons/
