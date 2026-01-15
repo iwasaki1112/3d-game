@@ -16,6 +16,70 @@ var target_angle = atan2(direction.x, direction.z)
 
 Godotのデフォルト（`-Z` が前方）とは異なるため、視界判定・自動照準・移動回転など、向きを扱うコードでは必ずこの規約に従うこと。
 
+### ⚠️ 座標系に関する重要な注意点
+
+このプロジェクトの `+Z` 前方座標系は、Godotの多くのAPIやデフォルト動作と逆であるため、以下の点に特に注意が必要：
+
+#### 1. `look_at()` の挙動
+
+`Node3D.look_at()` は **`-Z`をターゲット方向に向ける**。そのため、このプロジェクトでキャラクターをターゲット方向に向けるには**反対方向を指定**する必要がある。
+
+```gdscript
+# ❌ 間違い: キャラクターがターゲットの反対を向く
+character.look_at(target, Vector3.UP)
+
+# ✅ 正解: 反対方向を指定してキャラクターの+Zをターゲットに向ける
+var opposite_target = character.global_position - (target - character.global_position)
+character.look_at(opposite_target, Vector3.UP)
+
+# または
+var direction = (target - character.global_position).normalized()
+var opposite = character.global_position - direction
+character.look_at(opposite, Vector3.UP)
+```
+
+#### 2. BlendSpace2D の左右座標
+
+ストレイフアニメーションのBlendSpace2Dでは、左右のマッピングが**通常と逆**になる場合がある。
+`+Z`前方座標系では：
+
+```gdscript
+# BlendSpace2D座標（animation_component.gd）
+# 左ストレイフ → Vector2(1, 0)   # 通常と逆
+# 右ストレイフ → Vector2(-1, 0)  # 通常と逆
+# 前進        → Vector2(0, 1)
+# 後退        → Vector2(0, -1)
+```
+
+#### 3. スクリーン座標からワールド座標への変換
+
+マウス位置をワールド方向に変換する際、Y軸のマッピングに注意：
+
+```gdscript
+# test_strafe.gd の例
+# スクリーンY軸を反転してワールド方向に変換
+var world_dir = cam_right * screen_offset.x + cam_forward * (-screen_offset.y)
+```
+
+#### 4. カメラの前方ベクトル
+
+カメラは **`-Z`が前方**（Godot標準）のままであることに注意。キャラクターとカメラで前方の取得方法が異なる：
+
+```gdscript
+# キャラクターの前方（+Z）
+var char_forward = character.global_transform.basis.z
+
+# カメラの前方（-Z、Godot標準）
+var cam_forward = -camera.global_transform.basis.z
+```
+
+### チェックリスト（新機能実装時）
+
+- [ ] `look_at()` を使用する場合、反対方向を指定しているか確認
+- [ ] BlendSpace2Dの座標が正しくマッピングされているか確認
+- [ ] 移動方向とアニメーションが一致しているか実機で確認
+- [ ] カメラ関連の処理では `-Z` 前方を使用しているか確認
+
 ---
 
 ## アウトライン（選択ハイライト）
@@ -556,6 +620,157 @@ var direction: Vector3 = character.movement.get_current_vision_direction()
 - `scripts/characters/components/movement_component.gd` - 移動コンポーネント
 - `scripts/characters/components/animation_component.gd` - アニメーション管理
 - `scripts/effects/movement_marker.gd` - 移動マーカー
+
+---
+
+## ストレイフ（8方向移動）
+
+キャラクターが視線方向を維持しながら任意の方向に移動できるシステム。
+マウスで視線方向を制御し、WASDで8方向に移動する。
+
+### 概要
+
+| 要素 | 説明 |
+|------|------|
+| 入力 | WASD（移動）+ マウス（視線方向） |
+| アニメーション | BlendSpace2Dによる8方向ブレンド |
+| 使用シーン | 戦術的移動、角を曲がる際の索敵 |
+
+### 基本API
+
+```gdscript
+# ストレイフモードを有効化
+character.enable_strafe(facing_direction: Vector3)
+
+# ストレイフモードを無効化
+character.disable_strafe()
+
+# ストレイフが有効か確認
+var enabled: bool = character.is_strafe_enabled()
+```
+
+### MovementComponent API
+
+```gdscript
+# ストレイフモードを有効化
+movement.enable_strafe_mode(facing_direction: Vector3)
+
+# ストレイフモードを無効化
+movement.disable_strafe_mode()
+
+# ストレイフブレンド座標を取得
+# @return Vector2(x, y) - x: 左右成分, y: 前後成分
+var blend: Vector2 = movement.get_strafe_blend()
+```
+
+### AnimationComponent API
+
+```gdscript
+# ストレイフブレンドを設定（8方向移動用）
+# @param x: 左右成分（-1 = 左, 0 = 前後, +1 = 右）
+# @param y: 前後成分（-1 = 後退, 0 = 停止, +1 = 前進）
+animation.set_strafe_blend(x: float, y: float)
+
+# ストレイフを無効化（通常の前進歩行に戻す）
+animation.disable_strafe()
+
+# ストレイフが有効かどうか
+var enabled: bool = animation.is_strafe_enabled()
+
+# アニメーション速度を移動速度に合わせる
+# @param current_speed: 現在の移動速度（m/s）
+# @param is_running: 走っているかどうか
+animation.set_animation_speed(current_speed: float, is_running: bool)
+```
+
+### BlendSpace2D構成
+
+8方向のアニメーションをBlendSpace2Dでブレンド：
+
+```
+        forward (0, 1)
+            ↑
+            |
+left ←──────┼──────→ right
+(1, 0)      |      (-1, 0)
+            ↓
+        backward (0, -1)
+```
+
+**注意**: このプロジェクトの `+Z` 前方座標系により、左右の座標が通常と逆になっている。
+
+### アニメーション速度調整
+
+移動速度とアニメーション速度を同期させ、滑りを防止：
+
+```gdscript
+# AnimationComponentエクスポート設定
+@export var anim_base_walk_speed: float = 1.5  # 歩行アニメーションの基準速度
+@export var anim_base_run_speed: float = 4.0   # 走行アニメーションの基準速度
+```
+
+TimeScaleノードにより自動的にアニメーション速度が調整される：
+
+```
+time_scale = current_speed / base_speed
+```
+
+基準速度の調整方法：
+- アニメーションが速すぎる場合 → 基準速度を**下げる**
+- アニメーションが遅すぎる場合 → 基準速度を**上げる**
+
+### 必要なアニメーション
+
+| アニメーション名 | 説明 |
+|------------------|------|
+| `idle` | 待機 |
+| `forward` | 前進 |
+| `backward` | 後退 |
+| `left_strafe` | 左横歩き |
+| `right_strafe` | 右横歩き |
+
+### テストシーン
+
+`scenes/tests/test_strafe.tscn` でストレイフ動作を確認可能。
+
+操作方法：
+- **WASD**: 8方向移動
+- **マウス**: 視線方向（キャラクターがマウス方向を向く）
+- **Shift**: 走り（走り中はストレイフ無効）
+
+### 統合例
+
+```gdscript
+# WASD入力でストレイフ移動
+func _physics_process(_delta: float) -> void:
+    var input_dir = Vector3.ZERO
+    if Input.is_key_pressed(KEY_W): input_dir.z -= 1
+    if Input.is_key_pressed(KEY_S): input_dir.z += 1
+    if Input.is_key_pressed(KEY_A): input_dir.x -= 1
+    if Input.is_key_pressed(KEY_D): input_dir.x += 1
+
+    if input_dir.length_squared() > 0:
+        input_dir = input_dir.normalized()
+
+    var is_running = Input.is_key_pressed(KEY_SHIFT)
+
+    # 走り中はストレイフを無効化
+    if is_running:
+        character.disable_strafe()
+    else:
+        # マウス方向を視線方向として設定
+        var facing = get_mouse_world_direction()
+        character.enable_strafe(facing)
+
+    character.movement.set_input_direction(input_dir, is_running)
+```
+
+### 関連ファイル
+
+- `scripts/characters/components/movement_component.gd` - ストレイフブレンド計算
+- `scripts/characters/components/animation_component.gd` - BlendSpace2D管理
+- `scripts/tests/test_strafe.gd` - ストレイフテストシーン
+- `scenes/tests/test_strafe.tscn` - ストレイフテストシーン
 
 ---
 

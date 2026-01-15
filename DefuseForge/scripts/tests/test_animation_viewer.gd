@@ -85,6 +85,10 @@ var _highlight_checkbox: CheckButton
 # Team selection
 var _team_option_button: OptionButton
 
+# Strafe mode
+var _strafe_checkbox: CheckButton
+var _strafe_mode_enabled: bool = false
+
 # Context menu and interaction
 var _interaction_manager: Node
 var _context_menu: Control
@@ -554,6 +558,18 @@ func _populate_left_panel() -> void:
 	_highlight_checkbox.toggled.connect(_on_selection_toggled)
 	vbox.add_child(_highlight_checkbox)
 
+	vbox.add_child(HSeparator.new())
+
+	# Strafe mode
+	var strafe_label = Label.new()
+	strafe_label.text = "Movement"
+	vbox.add_child(strafe_label)
+
+	_strafe_checkbox = CheckButton.new()
+	_strafe_checkbox.text = "Strafe Mode"
+	_strafe_checkbox.toggled.connect(_on_strafe_toggled)
+	vbox.add_child(_strafe_checkbox)
+
 
 func _populate_right_panel() -> void:
 	var scroll = right_panel.get_child(0) as ScrollContainer
@@ -794,8 +810,38 @@ func _physics_process(_delta: float) -> void:
 
 		# Shiftで走る
 		var is_running = Input.is_key_pressed(KEY_SHIFT)
+
+		# ストレイフモード時は視線方向をマウス位置で更新
+		if _strafe_mode_enabled and not is_running:
+			_update_strafe_facing()
+		elif _strafe_mode_enabled and is_running:
+			# 走り時はストレイフを一時無効化
+			controlled_character.movement.strafe_mode = false
+
 		controlled_character.movement.set_input_direction(input_dir, is_running)
 		# CharacterBase._physics_process()がmove_and_slide()を呼ぶ
+
+
+## ストレイフモード時の視線方向をマウス位置で更新
+func _update_strafe_facing() -> void:
+	if not controlled_character or not camera:
+		return
+
+	var mouse_pos = get_viewport().get_mouse_position()
+	var from = camera.project_ray_origin(mouse_pos)
+	var dir = camera.project_ray_normal(mouse_pos)
+
+	# 地面（Y=0）との交点を計算
+	if abs(dir.y) > 0.001:
+		var t = -from.y / dir.y
+		if t > 0:
+			var intersection = from + dir * t
+			var facing_dir = intersection - controlled_character.global_position
+			facing_dir.y = 0
+			if facing_dir.length_squared() > 0.001:
+				controlled_character.movement.enable_strafe_mode(facing_dir.normalized())
+				# キャラクターの向きも更新
+				controlled_character.rotation.y = atan2(facing_dir.x, facing_dir.z)
 
 
 func _process(_delta: float) -> void:
@@ -996,6 +1042,19 @@ func _on_selection_toggled(toggled_on: bool) -> void:
 		_selection_manager.select(character_body)
 	else:
 		_selection_manager.deselect()
+
+
+func _on_strafe_toggled(toggled_on: bool) -> void:
+	_strafe_mode_enabled = toggled_on
+	if controlled_character:
+		if toggled_on:
+			# 現在の向きを視線方向として固定
+			var facing = -controlled_character.global_transform.basis.z
+			controlled_character.enable_strafe(facing)
+			print("[AnimViewer] Strafe mode enabled")
+		else:
+			controlled_character.disable_strafe()
+			print("[AnimViewer] Strafe mode disabled")
 
 
 func _on_team_selected(index: int) -> void:

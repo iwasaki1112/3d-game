@@ -9,6 +9,7 @@
 開発途中。テストシーン：
 - `scenes/tests/test_animation_viewer.tscn` - アニメーション確認用
 - `scenes/tests/test_path_drawer.tscn` - パス描画・移動確認用
+- `scenes/tests/test_strafe.tscn` - ストレイフ（8方向移動）確認用
 
 ## ドキュメント
 `docs/godot/` 配下：
