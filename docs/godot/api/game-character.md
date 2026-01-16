@@ -247,3 +247,4 @@ func can_attack(target: GameCharacter) -> bool:
 - [CharacterPreset](character-preset.md)
 - [CharacterRegistry](character-registry.md)
 - [CharacterAnimationController](character-animation-controller.md)
+- [VisionComponent](vision-component.md)

@@ -3,6 +3,7 @@ extends Node3D
 ## Debug tool to test different characters from CharacterRegistry
 
 const AnimCtrl = preload("res://scripts/animation/character_animation_controller.gd")
+const FogOfWarSystemScript = preload("res://scripts/systems/fog_of_war_system.gd")
 
 @onready var camera: Camera3D = $Camera3D
 @onready var character_dropdown: OptionButton = $UI/CharacterDropdown
@@ -11,15 +12,25 @@ const AnimCtrl = preload("res://scripts/animation/character_animation_controller
 var current_character: Node = null
 var aim_position := Vector3.ZERO
 var ground_plane := Plane(Vector3.UP, 0)
+var fog_of_war_system: Node3D = null
 
 func _ready() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_CONFINED)
+	_setup_fog_of_war()
 	_populate_dropdown()
 	character_dropdown.item_selected.connect(_on_character_selected)
 
 	# Spawn first character
 	if character_dropdown.item_count > 0:
 		_on_character_selected(0)
+
+
+func _setup_fog_of_war() -> void:
+	fog_of_war_system = Node3D.new()
+	fog_of_war_system.set_script(FogOfWarSystemScript)
+	fog_of_war_system.name = "FogOfWarSystem"
+	fog_of_war_system.map_size = Vector2(50, 50)  # Match floor size
+	add_child(fog_of_war_system)
 
 func _populate_dropdown() -> void:
 	character_dropdown.clear()
@@ -41,6 +52,10 @@ func _on_character_selected(index: int) -> void:
 	_spawn_character(preset_id)
 
 func _spawn_character(preset_id: String) -> void:
+	# Unregister old vision from FoW
+	if current_character and current_character.vision and fog_of_war_system:
+		fog_of_war_system.unregister_vision(current_character.vision)
+
 	# Remove current character
 	if current_character:
 		current_character.queue_free()
@@ -50,7 +65,21 @@ func _spawn_character(preset_id: String) -> void:
 	current_character = CharacterRegistry.create_character(preset_id, Vector3.ZERO)
 	if current_character:
 		add_child(current_character)
+		_setup_character_vision()
 		_update_info_label(preset_id)
+
+
+func _setup_character_vision() -> void:
+	if not current_character:
+		return
+
+	# Setup vision component
+	var vision = current_character.setup_vision(90.0, 15.0)
+
+	# Register with FoW system
+	if fog_of_war_system and vision:
+		await get_tree().process_frame  # Wait for VisionComponent to initialize
+		fog_of_war_system.register_vision(vision)
 
 func _update_info_label(preset_id: String) -> void:
 	var preset = CharacterRegistry.get_preset(preset_id)
@@ -58,6 +87,7 @@ func _update_info_label(preset_id: String) -> void:
 		info_label.text = """Character: %s (%s)
 Team: %s
 HP: %.0f
+FoW: Active (FOV: 90°, Range: 15m)
 
 Controls:
 WASD: Move | Shift: Run | C: Crouch

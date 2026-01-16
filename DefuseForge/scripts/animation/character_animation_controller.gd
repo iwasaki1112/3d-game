@@ -171,6 +171,12 @@ func get_current_speed() -> float:
 func is_dead() -> bool:
 	return _is_dead
 
+## Get current look direction (model's forward direction)
+func get_look_direction() -> Vector3:
+	if not _model:
+		return Vector3.FORWARD
+	return _model.global_transform.basis.z
+
 ## Play death animation
 ## hit_direction: Direction the hit came FROM (e.g., FRONT means shot from front, falls backward)
 ## headshot: If true, plays headshot variant if available

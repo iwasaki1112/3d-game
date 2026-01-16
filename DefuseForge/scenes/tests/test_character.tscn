@@ -19,6 +19,9 @@ ambient_light_energy = 0.5
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_1"]
 albedo_color = Color(0.3, 0.3, 0.3, 1)
 
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_2"]
+albedo_color = Color(0.6, 0.4, 0.3, 1)
+
 [node name="TestCharacter" type="Node3D"]
 script = ExtResource("1_script")
 
@@ -31,9 +34,11 @@ light_energy = 1.5
 shadow_enabled = true
 
 [node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.866, 0.5, 0, -0.5, 0.866, 0, 3, 5)
+transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 20, 0)
 current = true
 fov = 60.0
+projection = 1
+size = 10.0
 
 [node name="Floor" type="CSGBox3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
@@ -55,3 +60,11 @@ offset_top = 50.0
 offset_right = 400.0
 offset_bottom = 200.0
 text = "Loading..."
+
+[node name="Wall" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 1, 0)
+use_collision = true
+collision_layer = 2
+collision_mask = 0
+size = Vector3(0.5, 2, 6)
+material = SubResource("StandardMaterial3D_2")

@@ -35,6 +35,7 @@ var is_alive: bool = true
 # References
 # ============================================
 var anim_ctrl: Node = null  # CharacterAnimationController
+var vision: VisionComponent = null  # VisionComponent for FoW
 
 # ============================================
 # Lifecycle
@@ -79,6 +80,9 @@ func get_health_ratio() -> float:
 func reset_health() -> void:
 	current_health = max_health
 	is_alive = true
+	# Re-enable vision on respawn
+	if vision:
+		vision.enable()
 
 # ============================================
 # Team API
@@ -105,6 +109,29 @@ func get_anim_controller() -> Node:
 	return anim_ctrl
 
 # ============================================
+# Vision Component API
+# ============================================
+
+## Set VisionComponent
+func set_vision_component(component: VisionComponent) -> void:
+	vision = component
+
+## Get VisionComponent
+func get_vision_component() -> VisionComponent:
+	return vision
+
+## Setup vision component (auto-create if not exists)
+func setup_vision(fov: float = 90.0, view_dist: float = 15.0) -> VisionComponent:
+	if vision == null:
+		vision = VisionComponent.new()
+		vision.name = "VisionComponent"
+		add_child(vision)
+
+	vision.set_fov(fov)
+	vision.set_view_distance(view_dist)
+	return vision
+
+# ============================================
 # Death Processing
 # ============================================
 
@@ -115,6 +142,10 @@ func _die(killer: Node3D = null, is_headshot: bool = false) -> void:
 	if anim_ctrl and anim_ctrl.has_method("play_death"):
 		var hit_dir := _calculate_hit_direction(killer)
 		anim_ctrl.play_death(hit_dir, is_headshot)
+
+	# Disable vision on death
+	if vision:
+		vision.disable()
 
 	# Disable collision
 	_disable_collision()
