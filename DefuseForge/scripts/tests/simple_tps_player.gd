@@ -8,6 +8,11 @@ enum Animations {
 	WALK,
 }
 
+enum CharacterType {
+	MIXAMO,      # 8方向ストレイフ
+	TPS_ROBOT,   # 5方向ストレイフ（TPS Demo）
+}
+
 const MOTION_INTERPOLATE_SPEED: float = 10.0
 const ROTATION_INTERPOLATE_SPEED: float = 10.0
 const MOVE_SPEED: float = 5.0  # Root motion無効時のフォールバック
@@ -60,9 +65,15 @@ var anim_player: AnimationPlayer
 var skeleton: Skeleton3D
 var hips_bone_idx: int = -1
 var hips_rest_position: Vector3
+var spine_bone_idx: int = -1  # 上半身回転用
 
 ## Aiming状態
 var aiming: bool = false
+var look_target: Vector3 = Vector3(5, 0, -5)  # キューブの位置
+
+## キャラクター切り替え
+var current_character: CharacterType = CharacterType.MIXAMO
+
 
 
 func _ready() -> void:
@@ -72,22 +83,12 @@ func _ready() -> void:
 	_setup_animation_tree()
 
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
-	print("[SimpleTPS] Ready - WASD:Move, Mouse:Look, RightClick:Aim, ESC:Release mouse")
+	print("[SimpleTPS] Ready - WASD:Move, RightClick:Aim, Tab:Switch Character, ESC:Release mouse")
+	print("[SimpleTPS] Current: Mixamo (TPSDemo style - character rotation only)")
 
 
 func _input(event: InputEvent) -> void:
-	# マウス移動でカメラ回転
-	if event is InputEventMouseMotion:
-		var sensitivity := 0.003
-		if aiming:
-			sensitivity *= 0.75
-		camera_base.rotate_y(-event.relative.x * sensitivity)
-		camera_base.orthonormalize()
-		camera_rot.rotation.x = clampf(
-			camera_rot.rotation.x - event.relative.y * sensitivity,
-			deg_to_rad(-89),
-			deg_to_rad(70)
-		)
+	# 頭上カメラは固定 - マウス回転無効
 
 	# ESCでマウス解放
 	if event is InputEventKey and event.keycode == KEY_ESCAPE and event.pressed:
@@ -95,6 +96,10 @@ func _input(event: InputEvent) -> void:
 			Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 		else:
 			Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+
+	# Tabでキャラクター切り替え
+	if event is InputEventKey and event.keycode == KEY_TAB and event.pressed:
+		_switch_character()
 
 	# 右クリックでエイム切り替え
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
@@ -115,6 +120,30 @@ func _reset_hips_position() -> void:
 	pass
 
 
+
+
+func _switch_character() -> void:
+	# 現在のモデルとAnimationTreeを削除
+	if player_model:
+		player_model.queue_free()
+	if animation_tree:
+		animation_tree.queue_free()
+
+	# キャラクタータイプを切り替え
+	if current_character == CharacterType.MIXAMO:
+		current_character = CharacterType.TPS_ROBOT
+		print("[SimpleTPS] Switching to: TPS Robot")
+	else:
+		current_character = CharacterType.MIXAMO
+		print("[SimpleTPS] Switching to: Mixamo")
+
+	# 新しいキャラクターをセットアップ
+	await get_tree().process_frame  # 削除完了を待つ
+	_setup_model()
+	_load_animations()
+	_setup_animation_tree()
+
+
 func _update_input(delta: float) -> void:
 	# 入力取得（WASD）
 	var input_motion := Vector2.ZERO
@@ -132,35 +161,37 @@ func _update_input(delta: float) -> void:
 
 
 func _apply_movement(delta: float) -> void:
-	# カメラ方向を取得（TPS Demo準拠）
-	var camera_basis: Basis = camera_rot.global_transform.basis
-	var camera_z: Vector3 = camera_basis.z
-	var camera_x: Vector3 = camera_basis.x
+	# キャラクター切り替え中はスキップ
+	if not is_instance_valid(player_model):
+		return
 
-	camera_z.y = 0
-	camera_z = camera_z.normalized()
-	camera_x.y = 0
-	camera_x = camera_x.normalized()
+	# トップダウンカメラ用 - ワールド座標基準
+	# W: -Z（前）, S: +Z（後）, A: -X（左）, D: +X（右）
+	var world_forward := Vector3(0, 0, -1)
+	var world_right := Vector3(1, 0, 0)
+
+	# 移動方向を計算
+	var move_dir := world_right * motion.x + world_forward * (-motion.y)
 
 	if aiming:
-		# Strafeモード: カメラ方向を向いたまま移動
-		var q_from: Quaternion = orientation.basis.get_rotation_quaternion()
-		var q_to: Quaternion = camera_base.global_transform.basis.get_rotation_quaternion()
-		orientation.basis = Basis(q_from.slerp(q_to, delta * ROTATION_INTERPOLATE_SPEED))
-
-		_animate(Animations.STRAFE, delta)
-	else:
-		# Walkモード: 移動方向を向く（TPS Demo準拠）
-		var target: Vector3 = camera_x * motion.x + camera_z * motion.y
-		if target.length() > 0.001:
+		# Strafeモード: キューブ（ターゲット）を向く
+		var to_target := look_target - global_position
+		to_target.y = 0
+		if to_target.length() > 0.001:
 			var q_from: Quaternion = orientation.basis.get_rotation_quaternion()
-			var q_to: Quaternion = Basis.looking_at(target).get_rotation_quaternion()
+			var q_to: Quaternion = Basis.looking_at(-to_target).get_rotation_quaternion()
+			orientation.basis = Basis(q_from.slerp(q_to, delta * ROTATION_INTERPOLATE_SPEED))
+		_animate(Animations.STRAFE, delta, move_dir)
+	else:
+		# Walkモード: 移動方向を向く（-move_dirで反転）
+		if move_dir.length() > 0.001:
+			var q_from: Quaternion = orientation.basis.get_rotation_quaternion()
+			var q_to: Quaternion = Basis.looking_at(-move_dir).get_rotation_quaternion()
 			orientation.basis = Basis(q_from.slerp(q_to, delta * ROTATION_INTERPOLATE_SPEED))
 
 		_animate(Animations.WALK, delta)
 
-	# 速度ベース移動 - カメラ軸を反転
-	var move_dir := -camera_x * motion.x - camera_z * motion.y
+	# 速度ベース移動
 	if move_dir.length() > 0.01:
 		velocity.x = move_dir.x * MOVE_SPEED
 		velocity.z = move_dir.z * MOVE_SPEED
@@ -180,16 +211,21 @@ func _apply_movement(delta: float) -> void:
 	player_model.global_transform.basis = orientation.basis
 
 
-func _animate(anim: Animations, _delta: float) -> void:
+func _animate(anim: Animations, _delta: float, move_dir: Vector3 = Vector3.ZERO) -> void:
 	current_animation = anim
 
-	if not animation_tree:
+	if not animation_tree or not is_instance_valid(animation_tree):
 		return
 
 	if anim == Animations.STRAFE:
 		animation_tree["parameters/state/transition_request"] = "strafe"
-		# Y軸は反転（TPS Demo準拠）
-		animation_tree["parameters/strafe/blend_position"] = Vector2(motion.x, -motion.y)
+		# ワールド座標の移動方向をキャラクターのローカル座標に変換
+		var local_dir := orientation.basis.inverse() * move_dir
+		var blend_pos := Vector2(local_dir.x, local_dir.z)
+		animation_tree["parameters/strafe/blend_position"] = blend_pos
+		# デバッグ出力
+		if move_dir.length() > 0.1:
+			print("move_dir: %s, local_dir: %s, blend: %s" % [move_dir, local_dir, blend_pos])
 
 	elif anim == Animations.WALK:
 		animation_tree["parameters/state/transition_request"] = "walk"
@@ -198,38 +234,34 @@ func _animate(anim: Animations, _delta: float) -> void:
 
 
 func _setup_camera() -> void:
-	# TPS Demo準拠のカメラセットアップ
+	# 頭上カメラ（トップダウン）- 固定
 	camera_base = Node3D.new()
 	camera_base.name = "CameraBase"
 	add_child(camera_base)
-	camera_base.position.y = 1.6
 
 	camera_rot = Node3D.new()
 	camera_rot.name = "CameraRot"
+	# 真下を向く（-90度）
+	camera_rot.rotation.x = deg_to_rad(-90)
 	camera_base.add_child(camera_rot)
-
-	# TPS DemoではSpringArm3Dを使用し、180度回転している
-	var spring_arm = Node3D.new()
-	spring_arm.name = "SpringArm"
-	spring_arm.transform = Transform3D(
-		Vector3(-1, 0, 0),
-		Vector3(0, 0.94, 0.34),
-		Vector3(0, 0.34, -0.94),
-		Vector3.ZERO
-	)
-	camera_rot.add_child(spring_arm)
 
 	camera = Camera3D.new()
 	camera.name = "Camera3D"
-	camera.position = Vector3(0, 0, 2.4)
-	spring_arm.add_child(camera)
+	camera.position = Vector3(0, 0, 10)  # 高さ10m上空
+	camera_rot.add_child(camera)
 	camera.current = true
 
 
 func _setup_model() -> void:
-	var player_scene = load("res://assets/characters/animations/character_t_pose.fbx")
+	var model_path: String
+	if current_character == CharacterType.MIXAMO:
+		model_path = "res://assets/characters/animations/character_t_pose.fbx"
+	else:
+		model_path = "res://assets/characters/tps_demo_robot.glb"
+
+	var player_scene = load(model_path)
 	if player_scene == null:
-		push_error("[SimpleTPS] Failed to load character")
+		push_error("[SimpleTPS] Failed to load character: %s" % model_path)
 		return
 
 	player_model = player_scene.instantiate()
@@ -255,16 +287,28 @@ func _setup_model() -> void:
 
 	if skeleton:
 		print("[SimpleTPS] Skeleton found: %s" % skeleton.name)
-		# Mixamoキャラクターは "mixamorig_Hips" プレフィックス付き
-		hips_bone_idx = skeleton.find_bone("mixamorig_Hips")
-		if hips_bone_idx < 0:
-			hips_bone_idx = skeleton.find_bone("Hips")  # フォールバック
+		# キャラクタータイプに応じたボーン名で検索
+		if current_character == CharacterType.MIXAMO:
+			hips_bone_idx = skeleton.find_bone("mixamorig_Hips")
+			if hips_bone_idx < 0:
+				hips_bone_idx = skeleton.find_bone("Hips")
+		else:
+			hips_bone_idx = skeleton.find_bone("root")  # TPS Demoはrootボーン
+			if hips_bone_idx < 0:
+				hips_bone_idx = skeleton.find_bone("Hips")
 		if hips_bone_idx >= 0:
 			hips_rest_position = skeleton.get_bone_pose_position(hips_bone_idx)
-			print("[SimpleTPS] Hips bone found at index %d, rest position: %s" % [hips_bone_idx, hips_rest_position])
+			print("[SimpleTPS] Root bone found at index %d, rest position: %s" % [hips_bone_idx, hips_rest_position])
 		else:
-			# ボーン名一覧を出力
-			print("[SimpleTPS] Hips not found. Available bones: %s" % str(_get_bone_names(skeleton)))
+			print("[SimpleTPS] Root bone not found. Available bones: %s" % str(_get_bone_names(skeleton)))
+
+		# 上半身回転用のSpineボーンを探す（Mixamoのみ）
+		if current_character == CharacterType.MIXAMO:
+			spine_bone_idx = skeleton.find_bone("mixamorig_Spine1")
+			if spine_bone_idx < 0:
+				spine_bone_idx = skeleton.find_bone("mixamorig_Spine")
+			if spine_bone_idx >= 0:
+				print("[SimpleTPS] Spine bone found at index %d" % spine_bone_idx)
 	else:
 		push_warning("[SimpleTPS] Skeleton3D not found in model")
 
@@ -273,6 +317,13 @@ func _load_animations() -> void:
 	if not anim_player:
 		return
 
+	if current_character == CharacterType.TPS_ROBOT:
+		# TPS Robotはアニメーション内蔵
+		print("[SimpleTPS] TPS Robot - using built-in animations")
+		print("[SimpleTPS] Available animations: %s" % str(anim_player.get_animation_list()))
+		return
+
+	# Mixamoキャラクター用にFBXからアニメーションをロード
 	print("[SimpleTPS] Loading animations from FBX files...")
 	var loaded_count := 0
 
@@ -346,14 +397,14 @@ func _setup_animation_tree() -> void:
 	animation_tree.root_node = player_model.get_path()
 	animation_tree.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_PHYSICS
 
-	# Root motion trackを設定（Mixamoキャラクター用）
+	# Root motion trackを設定
 	if skeleton and hips_bone_idx >= 0:
 		var skel_path := player_model.get_path_to(skeleton)
-		var hips_name := skeleton.get_bone_name(hips_bone_idx)
-		animation_tree.root_motion_track = NodePath(str(skel_path) + ":" + hips_name)
-		print("[SimpleTPS] Root motion track set: %s:%s" % [skel_path, hips_name])
+		var bone_name := skeleton.get_bone_name(hips_bone_idx)
+		animation_tree.root_motion_track = NodePath(str(skel_path) + ":" + bone_name)
+		print("[SimpleTPS] Root motion track set: %s:%s" % [skel_path, bone_name])
 	else:
-		push_warning("[SimpleTPS] Skeleton/Hips not found, root motion may not work")
+		push_warning("[SimpleTPS] Skeleton/root bone not found, root motion may not work")
 
 	# BlendTreeを構築
 	var blend_tree := AnimationNodeBlendTree.new()
@@ -366,24 +417,37 @@ func _setup_animation_tree() -> void:
 	state_machine.add_input("walk")
 	blend_tree.add_node("state", state_machine, Vector2(400, 200))
 
-	# Strafe BlendSpace2D（8方向）- 座標修正済み
+	# キャラクタータイプに応じたアニメーション設定
 	var strafe_blend := AnimationNodeBlendSpace2D.new()
-	_add_blend_animation(strafe_blend, "walk_left", Vector2(-1, 0))
-	_add_blend_animation(strafe_blend, "walk_right", Vector2(1, 0))
-	_add_blend_animation(strafe_blend, "walk_backward", Vector2(0, -1))
-	_add_blend_animation(strafe_blend, "walk_forward", Vector2(0, 1))
-	_add_blend_animation(strafe_blend, "idle_aiming", Vector2(0, 0))
-	# 斜め方向
-	_add_blend_animation(strafe_blend, "walk_forward_left", Vector2(-0.7, 0.7))
-	_add_blend_animation(strafe_blend, "walk_forward_right", Vector2(0.7, 0.7))
-	_add_blend_animation(strafe_blend, "walk_backward_left", Vector2(-0.7, -0.7))
-	_add_blend_animation(strafe_blend, "walk_backward_right", Vector2(0.7, -0.7))
+
+	if current_character == CharacterType.TPS_ROBOT:
+		# TPS Robot: 5方向（ローカル座標基準）
+		# local_dir.x: 右(+)/左(-), local_dir.z: 後(+)/前(-)
+		_add_blend_animation(strafe_blend, "strafe_right", Vector2(1, 0))   # 右移動
+		_add_blend_animation(strafe_blend, "strafe_left", Vector2(-1, 0))   # 左移動
+		_add_blend_animation(strafe_blend, "strafe_back", Vector2(0, 1))    # 後移動
+		_add_blend_animation(strafe_blend, "strafe_front", Vector2(0, -1))  # 前移動
+		_add_blend_animation(strafe_blend, "Idlecombat", Vector2(0, 0))
+		print("[SimpleTPS] Strafe: 5-direction (local coords)")
+	else:
+		# Mixamo: 5方向（ローカル座標基準）
+		_add_blend_animation(strafe_blend, "walk_right", Vector2(1, 0))   # 右移動
+		_add_blend_animation(strafe_blend, "walk_left", Vector2(-1, 0))   # 左移動
+		_add_blend_animation(strafe_blend, "walk_backward", Vector2(0, 1))    # 後移動
+		_add_blend_animation(strafe_blend, "walk_forward", Vector2(0, -1))  # 前移動
+		_add_blend_animation(strafe_blend, "idle_aiming", Vector2(0, 0))
+		print("[SimpleTPS] Strafe: 5-direction (local coords)")
+
 	blend_tree.add_node("strafe", strafe_blend, Vector2(100, 100))
 
 	# Walk BlendSpace1D（速度ベース）
 	var walk_blend := AnimationNodeBlendSpace1D.new()
-	_add_blend1d_animation(walk_blend, "idle", 0.0)
-	_add_blend1d_animation(walk_blend, "walk_forward", 1.0)
+	if current_character == CharacterType.TPS_ROBOT:
+		_add_blend1d_animation(walk_blend, "Idle", 0.0)
+		_add_blend1d_animation(walk_blend, "running_gun", 1.0)
+	else:
+		_add_blend1d_animation(walk_blend, "idle", 0.0)
+		_add_blend1d_animation(walk_blend, "walk_forward", 1.0)
 	blend_tree.add_node("walk", walk_blend, Vector2(100, 300))
 
 	# 接続
