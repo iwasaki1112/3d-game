@@ -16,6 +16,7 @@ const PathDrawerScript = preload("res://scripts/effects/path_drawer.gd")
 @onready var info_label: Label = $UI/InfoLabel
 @onready var ui_layer: CanvasLayer = $UI
 @onready var manual_control_button: Button = $UI/ControlPanel/ManualControlButton
+@onready var vision_toggle_button: Button = $UI/ControlPanel/VisionToggleButton
 @onready var path_panel: VBoxContainer = $UI/PathPanel
 @onready var vision_label: Label = $UI/PathPanel/VisionLabel
 @onready var add_vision_button: Button = $UI/PathPanel/VisionHBox/AddVisionButton
@@ -38,6 +39,7 @@ var outlined_meshes: Array[MeshInstance3D] = []  ## アウトライン適用中�
 
 ## デバッグ操作モード
 var is_debug_control_enabled: bool = false  ## WASD/マウス操作の有効化（デフォルトOFF）
+var is_vision_enabled: bool = true  ## 視界/FoWの有効化（デフォルトON）
 
 ## パスシステム
 var path_drawer: Node3D = null
@@ -97,6 +99,10 @@ func _setup_control_buttons() -> void:
 	manual_control_button.pressed.connect(_on_manual_control_button_pressed)
 	_update_manual_control_button()
 
+	# Vision Toggle ボタン
+	vision_toggle_button.pressed.connect(_on_vision_toggle_button_pressed)
+	_update_vision_toggle_button()
+
 	# 視線ポイントボタン
 	add_vision_button.pressed.connect(_on_add_vision_button_pressed)
 	undo_vision_button.pressed.connect(_on_undo_vision_button_pressed)
@@ -128,6 +134,42 @@ func _on_manual_control_button_pressed() -> void:
 func _update_manual_control_button() -> void:
 	if manual_control_button:
 		manual_control_button.text = "Manual Control: %s" % ("ON" if is_debug_control_enabled else "OFF")
+
+
+func _on_vision_toggle_button_pressed() -> void:
+	is_vision_enabled = not is_vision_enabled
+	_update_vision_toggle_button()
+	_apply_vision_state()
+	print("[Debug] Vision/FoW: %s" % ("ON" if is_vision_enabled else "OFF"))
+
+
+func _update_vision_toggle_button() -> void:
+	if vision_toggle_button:
+		vision_toggle_button.text = "Vision/FoW: %s" % ("ON" if is_vision_enabled else "OFF")
+
+
+## 視界/FoWの状態を全キャラクターに適用
+func _apply_vision_state() -> void:
+	# 全キャラクターのVisionComponentを有効/無効化
+	for character in characters:
+		if character.has_method("get_vision"):
+			var vision = character.get_vision()
+			if vision:
+				if is_vision_enabled:
+					vision.enable()
+				else:
+					vision.disable()
+		elif character.get("vision"):
+			var vision = character.vision
+			if vision:
+				if is_vision_enabled:
+					vision.enable()
+				else:
+					vision.disable()
+
+	# FogOfWarSystemの表示を切り替え
+	if fog_of_war_system:
+		fog_of_war_system.set_fog_visible(is_vision_enabled)
 
 
 func _on_execute_button_pressed() -> void:
@@ -294,6 +336,11 @@ func _setup_character_vision() -> void:
 	if fog_of_war_system and vision:
 		await get_tree().process_frame  # Wait for VisionComponent to initialize
 		fog_of_war_system.register_vision(vision)
+
+		# 現在の視界状態を適用
+		if not is_vision_enabled:
+			vision.disable()
+			fog_of_war_system.set_fog_visible(false)
 
 func _update_info_label(preset_id: String) -> void:
 	var preset = CharacterRegistry.get_preset(preset_id)

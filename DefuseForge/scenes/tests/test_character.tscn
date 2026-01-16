@@ -71,6 +71,10 @@ offset_bottom = 400.0
 custom_minimum_size = Vector2(180, 40)
 text = "Manual Control: ON"
 
+[node name="VisionToggleButton" type="Button" parent="UI/ControlPanel"]
+custom_minimum_size = Vector2(180, 40)
+text = "Vision/FoW: ON"
+
 [node name="PathPanel" type="VBoxContainer" parent="UI"]
 visible = false
 anchors_preset = 7
