@@ -45,7 +45,8 @@ func _process_modification() -> void:
 		var twist = Quaternion(Vector3.UP, per_bone_yaw)  # 左右回転（ヨー）
 		var pitch = Quaternion(Vector3.RIGHT, per_bone_pitch)  # 上下照準（ピッチ）
 		var kick = Quaternion(Vector3.RIGHT, -per_bone_recoil)  # 後ろへ傾く（リコイル）
-		skeleton.set_bone_pose_rotation(bone_idx, current_rotation * twist * pitch * kick)
+		var new_rotation = current_rotation * twist * pitch * kick
+		skeleton.set_bone_pose_rotation(bone_idx, new_rotation)
 
 
 func _initialize() -> void:
