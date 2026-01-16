@@ -10,6 +10,8 @@ const AnimCtrl = preload("res://scripts/animation/character_animation_controller
 const FogOfWarSystemScript = preload("res://scripts/systems/fog_of_war_system.gd")
 const ContextMenuScript = preload("res://scripts/ui/context_menu_component.gd")
 const PathDrawerScript = preload("res://scripts/effects/path_drawer.gd")
+const PathFollowingCtrl = preload("res://scripts/characters/path_following_controller.gd")
+const RotationCtrl = preload("res://scripts/characters/character_rotation_controller.gd")
 
 @onready var camera: Camera3D = $Camera3D
 @onready var character_dropdown: OptionButton = $UI/CharacterDropdown
@@ -44,28 +46,16 @@ var is_vision_enabled: bool = true  ## 視界/FoWの有効化（デフォルトO
 ## パスシステム
 var path_drawer: Node3D = null
 var is_path_mode: bool = false  ## パス描画モード中
-var is_following_path: bool = false  ## パス追従中
-var current_path: Array[Vector3] = []  ## 追従中のパス
-var current_path_index: int = 0  ## 現在のパスポイントインデックス
-var path_following_character: CharacterBody3D = null  ## パス追従中のキャラクター
-var path_move_speed: float = 3.0  ## パス追従時の移動速度
-var path_run_speed: float = 5.5  ## パス追従時の走行速度
-var is_path_running: bool = false  ## 走行モード
-var current_vision_points: Array[Dictionary] = []  ## 視線ポイント
-var current_vision_index: int = 0  ## 現在の視線ポイントインデックス
-var forced_look_direction: Vector3 = Vector3.ZERO  ## 強制視線方向
-var last_move_direction: Vector3 = Vector3.ZERO  ## 最後の移動方向（完了時の向き保持用）
 
-## 回転モード
-var is_rotate_mode: bool = false  ## 回転モード中
-var rotate_character: Node = null  ## 回転対象キャラクター
-var rotate_original_direction: Vector3 = Vector3.ZERO  ## 回転前の向き（キャンセル用）
-var rotate_target_direction: Vector3 = Vector3.ZERO  ## 回転目標の向き（イージング用）
+## コントローラー
+var path_following_controller: Node = null
+var rotation_controller: Node = null
 
 func _ready() -> void:
 	_setup_fog_of_war()
 	_setup_context_menu()
 	_setup_path_drawer()
+	_setup_controllers()
 	_setup_control_buttons()
 	_populate_dropdown()
 	character_dropdown.item_selected.connect(_on_character_selected)
@@ -73,6 +63,24 @@ func _ready() -> void:
 	# Spawn first character
 	if character_dropdown.item_count > 0:
 		_on_character_selected(0)
+
+
+func _setup_controllers() -> void:
+	# PathFollowingController
+	path_following_controller = Node.new()
+	path_following_controller.set_script(PathFollowingCtrl)
+	path_following_controller.name = "PathFollowingController"
+	add_child(path_following_controller)
+	path_following_controller.path_completed.connect(_on_path_following_completed)
+	path_following_controller.path_cancelled.connect(_on_path_following_cancelled)
+
+	# CharacterRotationController
+	rotation_controller = Node.new()
+	rotation_controller.set_script(RotationCtrl)
+	rotation_controller.name = "RotationController"
+	add_child(rotation_controller)
+	rotation_controller.rotation_confirmed.connect(_on_rotation_confirmed)
+	rotation_controller.rotation_cancelled.connect(_on_rotation_cancelled)
 
 
 func _setup_context_menu() -> void:
@@ -217,64 +225,23 @@ func _update_path_panel_visibility() -> void:
 ## ========================================
 
 func _on_rotate_confirm_pressed() -> void:
-	# 最終的な向きを確定
-	if rotate_character and rotate_target_direction.length_squared() > 0.001:
-		var anim_ctrl = rotate_character.get_anim_controller()
-		if anim_ctrl:
-			anim_ctrl.set_look_direction(rotate_target_direction)
-	_finish_rotate_mode()
+	rotation_controller.confirm()
 
 
 func _on_rotate_cancel_pressed() -> void:
-	# 元の向きに戻す
-	if rotate_character and rotate_original_direction.length_squared() > 0.1:
-		var anim_ctrl = rotate_character.get_anim_controller()
-		if anim_ctrl:
-			anim_ctrl.update_animation(Vector3.ZERO, rotate_original_direction, false, 0.0)
-	_finish_rotate_mode()
+	rotation_controller.cancel()
 
 
-func _finish_rotate_mode() -> void:
-	is_rotate_mode = false
-	rotate_character = null
-	rotate_original_direction = Vector3.ZERO
-	rotate_target_direction = Vector3.ZERO
+func _on_rotation_confirmed(_final_direction: Vector3) -> void:
 	rotate_panel.visible = false
 	_update_mode_info("")
-	print("[RotateMode] Finished")
+	print("[RotateMode] Confirmed")
 
 
-func _handle_rotate_input(screen_pos: Vector2) -> void:
-	if not rotate_character or not camera:
-		return
-
-	# クリック位置をワールド座標に変換
-	var ground_pos = _get_ground_position_for_rotate(screen_pos)
-	if ground_pos == null:
-		return
-
-	# キャラクターからクリック位置への方向を計算
-	var char_pos = rotate_character.global_position
-	var direction = ground_pos - char_pos
-	direction.y = 0
-
-	if direction.length_squared() < 0.01:
-		return
-
-	direction = direction.normalized()
-
-	# 目標方向を設定（_physics_processでイージング）
-	rotate_target_direction = direction
-
-
-func _get_ground_position_for_rotate(screen_pos: Vector2) -> Variant:
-	var ray_origin = camera.project_ray_origin(screen_pos)
-	var ray_direction = camera.project_ray_normal(screen_pos)
-
-	var intersection = ground_plane.intersects_ray(ray_origin, ray_direction)
-	if intersection:
-		return intersection as Vector3
-	return null
+func _on_rotation_cancelled() -> void:
+	rotate_panel.visible = false
+	_update_mode_info("")
+	print("[RotateMode] Cancelled")
 
 
 func _setup_fog_of_war() -> void:
@@ -370,21 +337,21 @@ func _refresh_info_label() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	# 回転モード中のマウス/タッチ処理（UIで処理されなかった入力のみ）
-	if is_rotate_mode and event is InputEventMouseButton and event.pressed:
-		_handle_rotate_input(event.position)
+	if rotation_controller.is_rotation_active() and event is InputEventMouseButton and event.pressed:
+		rotation_controller.handle_input(event.position)
 
 
 func _input(event: InputEvent) -> void:
 	# ESCキー処理（モードキャンセル）
 	if event.is_action_pressed("ui_cancel"):
-		if is_path_mode or is_following_path:
+		if is_path_mode or path_following_controller.is_following_path():
 			_cancel_path_mode()
-		elif is_rotate_mode:
+		elif rotation_controller.is_rotation_active():
 			_on_rotate_cancel_pressed()
 
 	# マウス/タッチ処理（回転モード以外）
 	if event is InputEventMouseButton and event.pressed:
-		if not is_rotate_mode and not is_path_mode:
+		if not rotation_controller.is_rotation_active() and not is_path_mode:
 			_handle_mouse_click(event)
 
 	if not selected_character:
@@ -570,15 +537,8 @@ func _start_move_mode(character: Node) -> void:
 ## 回転モード開始
 func _start_rotate_mode(character: Node) -> void:
 	print("[ContextMenu] Rotate mode for: ", character.name)
-	is_rotate_mode = true
-	rotate_character = character
-
-	# 現在の向きを保存（キャンセル用・イージング用）
-	var anim_ctrl = character.get_anim_controller()
-	if anim_ctrl:
-		rotate_original_direction = anim_ctrl.get_look_direction()
-		rotate_target_direction = rotate_original_direction
-
+	rotation_controller.setup(character as CharacterBody3D, camera)
+	rotation_controller.start_rotation()
 	rotate_panel.visible = true
 	_update_mode_info("Rotate Mode: Tap to set direction")
 
@@ -593,16 +553,14 @@ func _start_control_mode(character: Node) -> void:
 		_update_info_label(preset_id)
 
 func _physics_process(delta: float) -> void:
-	# パス追従中は専用処理
-	if is_following_path:
-		_process_path_following(delta)
+	# パス追従中はコントローラーに処理を委譲
+	if path_following_controller.is_following_path():
+		path_following_controller.process(delta)
 		return
 
-	# 回転モード中は目標方向にイージング
-	if is_rotate_mode and rotate_character:
-		var anim_ctrl = rotate_character.get_anim_controller()
-		if anim_ctrl and rotate_target_direction.length_squared() > 0.001:
-			anim_ctrl.update_animation(Vector3.ZERO, rotate_target_direction, false, delta)
+	# 回転モード中はコントローラーに処理を委譲
+	if rotation_controller.is_rotation_active():
+		rotation_controller.process(delta)
 		return
 
 	if not selected_character:
@@ -724,49 +682,57 @@ func _execute_path(run: bool) -> void:
 		return
 
 	# パス情報を取得
-	current_path.clear()
+	var path: Array[Vector3] = []
 	var pending = path_drawer.get_drawn_path()
 	for point in pending:
-		current_path.append(point)
+		path.append(point)
 
-	current_vision_points = path_drawer.get_vision_points().duplicate()
-	current_vision_index = 0
-	current_path_index = 0
-	is_path_running = run
-	forced_look_direction = Vector3.ZERO
+	var vision_points = path_drawer.get_vision_points().duplicate()
 
 	# パス追従するキャラクターを設定
-	path_following_character = selected_character as CharacterBody3D
-	if not path_following_character:
+	var character = selected_character as CharacterBody3D
+	if not character:
 		print("[PathSystem] No valid character for path following")
 		_cancel_path_mode()
 		return
 
-	is_following_path = true
+	# コントローラーをセットアップして開始
+	path_following_controller.setup(character)
+	if not path_following_controller.start_path(path, vision_points, run):
+		print("[PathSystem] Failed to start path following")
+		_cancel_path_mode()
+		return
+
 	is_path_mode = false
-	# パスは移動中も表示を維持（clearしない）
 	path_drawer.disable()
 
 	if path_panel:
 		path_panel.visible = false
 	_update_mode_info("Following path...")
-	print("[PathSystem] Started path following with %d points, %d vision points" % [current_path.size(), current_vision_points.size()])
+	print("[PathSystem] Started path following with %d points, %d vision points" % [path.size(), vision_points.size()])
 
 
 ## パスモードをキャンセル
 func _cancel_path_mode() -> void:
 	is_path_mode = false
-	is_following_path = false
+	path_following_controller.cancel()
 	path_drawer.clear()
 	path_drawer.disable()
-	current_path.clear()
-	current_vision_points.clear()
-	path_following_character = null
-	forced_look_direction = Vector3.ZERO
 	_update_mode_info("")
 	if path_panel:
 		path_panel.visible = false
 	print("[PathSystem] Path mode cancelled")
+
+
+## パス追従完了時のコールバック
+func _on_path_following_completed() -> void:
+	_update_mode_info("")
+	print("[PathSystem] Path following completed")
+
+
+## パス追従キャンセル時のコールバック
+func _on_path_following_cancelled() -> void:
+	print("[PathSystem] Path following cancelled")
 
 
 ## モード情報を更新
@@ -775,128 +741,3 @@ func _update_mode_info(text: String) -> void:
 		_update_info_label(_get_character_preset_id(current_character) if current_character else "")
 	else:
 		info_label.text = text
-
-
-## パス追従処理（_physics_process内で呼ばれる）
-func _process_path_following(delta: float) -> void:
-	if not path_following_character or current_path.size() == 0:
-		_finish_path_following()
-		return
-
-	if current_path_index >= current_path.size():
-		_finish_path_following()
-		return
-
-	var target = current_path[current_path_index]
-	var char_pos = path_following_character.global_position
-	var to_target = target - char_pos
-	to_target.y = 0
-	var distance = to_target.length()
-
-	# 目標点に到達したら次へ
-	if distance < 0.15:
-		current_path_index += 1
-		if current_path_index >= current_path.size():
-			_finish_path_following()
-			return
-		target = current_path[current_path_index]
-		to_target = target - char_pos
-		to_target.y = 0
-
-	# 移動方向を計算
-	var move_dir = to_target.normalized()
-	var speed = path_run_speed if is_path_running else path_move_speed
-
-	# 最後の移動方向を保存（完了時の向き保持用）
-	if move_dir.length_squared() > 0.1:
-		last_move_direction = move_dir
-
-	# 視線方向を更新（視線ポイントがある場合）
-	_update_vision_direction()
-
-	# アニメーション更新
-	var anim_ctrl = path_following_character.get_anim_controller()
-	if anim_ctrl:
-		# 視線方向（forced_look_directionがあればそちらを使用）
-		var look_dir = forced_look_direction if forced_look_direction.length_squared() > 0.1 else move_dir
-		# ワールド座標の移動方向をそのまま渡す（アニメーションコントローラー内でストレイフ計算される）
-		anim_ctrl.update_animation(move_dir, look_dir, is_path_running, delta)
-
-	# 物理移動
-	path_following_character.velocity.x = move_dir.x * speed
-	path_following_character.velocity.z = move_dir.z * speed
-
-	if not path_following_character.is_on_floor():
-		path_following_character.velocity.y -= 9.8 * delta
-
-	path_following_character.move_and_slide()
-
-
-## ワールド方向をローカル方向に変換
-## 視線方向を更新
-func _update_vision_direction() -> void:
-	if current_vision_points.size() == 0:
-		forced_look_direction = Vector3.ZERO
-		return
-
-	# 現在のパス進行率を計算
-	var progress = _calculate_path_progress()
-
-	# 次の視線ポイントを探す
-	while current_vision_index < current_vision_points.size():
-		var vp = current_vision_points[current_vision_index]
-		if progress >= vp.path_ratio:
-			# この視線ポイントに到達
-			forced_look_direction = vp.direction
-			current_vision_index += 1
-		else:
-			break
-
-
-## パスの進行率を計算
-func _calculate_path_progress() -> float:
-	if current_path.size() < 2:
-		return 0.0
-
-	# パスの総距離を計算
-	var total_length = 0.0
-	for i in range(1, current_path.size()):
-		total_length += current_path[i - 1].distance_to(current_path[i])
-
-	# 現在位置までの距離を計算
-	var current_length = 0.0
-	for i in range(1, current_path_index + 1):
-		if i < current_path.size():
-			current_length += current_path[i - 1].distance_to(current_path[i])
-
-	# 現在のセグメント内の進行を追加
-	if current_path_index < current_path.size() and path_following_character:
-		var prev_index = max(0, current_path_index - 1)
-		var segment_start = current_path[prev_index]
-		var char_pos = path_following_character.global_position
-		char_pos.y = segment_start.y
-		# 前のポイントからの距離を追加
-		if current_path_index > 0:
-			current_length += segment_start.distance_to(char_pos)
-
-	return current_length / total_length if total_length > 0 else 0.0
-
-
-## パス追従完了
-func _finish_path_following() -> void:
-	# 完了時に最後の向きを維持するため、アニメーションを1回更新
-	if path_following_character and last_move_direction.length_squared() > 0.1:
-		var anim_ctrl = path_following_character.get_anim_controller()
-		if anim_ctrl:
-			# 視線ポイントがあった場合はその方向、なければ最後の移動方向
-			var final_dir = forced_look_direction if forced_look_direction.length_squared() > 0.1 else last_move_direction
-			anim_ctrl.update_animation(Vector3.ZERO, final_dir, false, 0.0)
-
-	is_following_path = false
-	path_following_character = null
-	current_path.clear()
-	current_vision_points.clear()
-	forced_look_direction = Vector3.ZERO
-	last_move_direction = Vector3.ZERO
-	_update_mode_info("")
-	print("[PathSystem] Path following completed")
