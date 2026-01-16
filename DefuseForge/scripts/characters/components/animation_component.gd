@@ -126,9 +126,6 @@ func setup(model: Node3D, skel: Skeleton3D) -> void:
 	_setup_animation_loops()
 	_setup_animation_tree(model)
 
-	print("[AnimationComponent] Setup complete")
-	print("[AnimationComponent] Available animations: %s" % str(anim_player.get_animation_list()))
-
 
 ## ========================================
 ## 移動状態 API
@@ -171,8 +168,6 @@ func set_crouching(crouching: bool) -> void:
 	posture_state = new_state
 	_update_locomotion_animation()
 	crouch_changed.emit(crouching)
-
-	print("[AnimationComponent] Crouch state: %s" % ("CROUCHING" if crouching else "STANDING"))
 
 
 ## しゃがみ中かどうか
@@ -471,10 +466,6 @@ func _setup_root_motion() -> void:
 
 	if root_bone_name.is_empty():
 		push_warning("[AnimationComponent] No root motion bone found (root/hips/pelvis)")
-		# 全ボーン名を出力（デバッグ用）
-		print("[AnimationComponent] Available bones:")
-		for i in range(skeleton.get_bone_count()):
-			print("  - %s" % skeleton.get_bone_name(i))
 		return
 
 	# AnimationTreeの親（モデル）からスケルトンへのパスを取得
@@ -486,9 +477,6 @@ func _setup_root_motion() -> void:
 	# ルートモーショントラックを設定
 	var root_motion_path = "%s:%s" % [skeleton_path, root_bone_name]
 	anim_tree.root_motion_track = NodePath(root_motion_path)
-
-	print("[AnimationComponent] Root motion bone: %s" % root_bone_name)
-	print("[AnimationComponent] Root motion track: %s" % root_motion_path)
 
 
 ## ルートモーションの位置デルタを取得
@@ -648,8 +636,6 @@ func _setup_upper_body_filter(blend_node: AnimationNodeBlend2) -> void:
 			blend_node.set_filter_path(NodePath(bone_path), true)
 			filter_count += 1
 
-	print("[AnimationComponent] Upper body filter: %d bones" % filter_count)
-
 
 ## ========================================
 ## 内部処理: アニメーション更新
@@ -699,15 +685,18 @@ func _update_locomotion_animation() -> void:
 
 
 ## ストレイフブレンド座標を更新
-## TPS Demo方式: Vector2(motion.x, -motion.y) - Y軸を反転
+## TPS Demo方式: Vector2(motion.x, -motion.y) - 両軸を反転
+## 理由: get_strafe_blend()は右=+X、前=+Yを返すが
+##       BlendSpace2Dは左=+X、前=+Yを期待する
 func _update_strafe_blend() -> void:
 	if anim_tree == null or not anim_tree.active:
 		return
 
 	# WALK状態でストレイフが有効な場合
 	if locomotion_state == LocomotionState.WALK and _strafe_enabled:
-		# TPS Demo方式: Y軸を反転して設定
-		var blend_pos = Vector2(_strafe_blend_x, -_strafe_blend_y)
+		# X軸: 左右反転（get_strafe_blendは右=+X、BlendSpace2Dは左=+X）
+		# Y軸: 前後反転（TPS Demo方式）
+		var blend_pos = Vector2(-_strafe_blend_x, -_strafe_blend_y)
 
 		if posture_state == PostureState.STANDING:
 			anim_tree.set("parameters/locomotion_walk/blend_position", blend_pos)

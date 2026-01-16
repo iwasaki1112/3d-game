@@ -128,7 +128,6 @@ func set_path_with_vision_points(movement_points: Array[Vector3], vision_pts: Ar
 		_has_vision_points = true
 		# 最初の視線方向は前方（または最初のポイントが0なら最初のポイントの方向）
 		_current_vision_direction = Vector3.ZERO
-		print("[MovementComponent] Vision points set: %d points" % _vision_points.size())
 	else:
 		_has_vision_points = false
 		_current_vision_direction = Vector3.ZERO
@@ -434,7 +433,6 @@ func _initialize_facing_direction() -> void:
 
 	if initial_direction.length_squared() > 0.001:
 		_character.rotation.y = atan2(initial_direction.x, initial_direction.z)
-		print("[MovementComponent] Initial facing set to path direction")
 
 
 ## パスの総距離を計算

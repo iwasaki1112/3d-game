@@ -1,7 +1,7 @@
 [gd_scene load_steps=10 format=3 uid="uid://bvlw3xstqy7pk"]
 
 [ext_resource type="Script" path="res://scripts/tests/test_strafe.gd" id="1_script"]
-[ext_resource type="PackedScene" uid="uid://bdl0xxl2qhv4g" path="res://assets/characters/tps_player/player.glb" id="2_character"]
+[ext_resource type="PackedScene" uid="uid://b0o2jj5mvw5kq" path="res://assets/characters/mixamo/mixamo_character.blend" id="2_character"]
 [ext_resource type="Script" uid="uid://dg33nhpmacdpl" path="res://scripts/characters/character_base.gd" id="3_character_base"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]

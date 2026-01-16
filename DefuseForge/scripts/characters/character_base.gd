@@ -484,10 +484,6 @@ func _update_strafe_blend() -> void:
 	if not movement or not animation:
 		return
 
-	# デバッグ出力
-	if Engine.get_process_frames() % 30 == 0 and movement.is_moving:
-		print("[CharBase] strafe_mode=%s, is_moving=%s" % [movement.strafe_mode, movement.is_moving])
-
 	# ストレイフモード時のみブレンド座標を更新
 	if movement.strafe_mode and movement.is_moving:
 		var blend = movement.get_strafe_blend()
@@ -584,7 +580,6 @@ func set_crouching(crouch: bool) -> void:
 		animation.set_crouching(is_crouching)
 
 	crouch_changed.emit(is_crouching)
-	print("[CharacterBase] Crouch state: %s" % ("CROUCHING" if is_crouching else "STANDING"))
 
 
 ## しゃがみ時のコリジョン形状を更新
@@ -706,11 +701,6 @@ func _update_vision_point_rotation() -> void:
 
 	# 進行方向とvision方向の角度差
 	var angle_diff = rad_to_deg(wrapf(vision_angle - move_angle, -PI, PI))
-
-	# デバッグ出力
-	if Engine.get_process_frames() % 30 == 0:
-		print("[Vision] diff=%.1f, move_angle=%.1f, vision_angle=%.1f" % [
-			angle_diff, rad_to_deg(move_angle), rad_to_deg(vision_angle)])
 
 	if absf(angle_diff) <= UPPER_BODY_ROTATION_LIMIT:
 		# 上半身だけで対応可能 - 通常歩行 + 上半身回転
