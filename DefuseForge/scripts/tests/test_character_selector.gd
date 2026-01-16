@@ -35,7 +35,6 @@ var ground_plane := Plane(Vector3.UP, 0)
 var fog_of_war_system: Node3D = null
 var context_menu: Control = null  ## コンテキストメニュー
 var outlined_meshes: Array[MeshInstance3D] = []  ## アウトライン適用中のメッシュ
-var original_materials: Dictionary = {}  ## 元のマテリアルを保存
 
 ## デバッグ操作モード
 var is_debug_control_enabled: bool = false  ## WASD/マウス操作の有効化（デフォルトOFF）
@@ -63,7 +62,6 @@ var rotate_target_direction: Vector3 = Vector3.ZERO  ## 回転目標の向き（
 
 func _ready() -> void:
 	_setup_fog_of_war()
-	_setup_outline_material()
 	_setup_context_menu()
 	_setup_path_drawer()
 	_setup_control_buttons()
@@ -73,12 +71,6 @@ func _ready() -> void:
 	# Spawn first character
 	if character_dropdown.item_count > 0:
 		_on_character_selected(0)
-
-
-func _setup_outline_material() -> void:
-	# ステンシルベースのアウトラインはマテリアルのプロパティで設定するため
-	# 事前のマテリアル作成は不要
-	pass
 
 
 func _setup_context_menu() -> void:
@@ -454,10 +446,6 @@ func _apply_outline(character: Node) -> void:
 			var mat = mesh.get_active_material(i)
 			print("[Outline] Surface %d material type: %s" % [i, mat.get_class() if mat else "null"])
 			if mat and mat is StandardMaterial3D:
-				# 元のマテリアルを保存
-				var key = "%s_%d" % [mesh.get_instance_id(), i]
-				original_materials[key] = mat
-
 				# マテリアルを複製してステンシルアウトラインを設定
 				var mat_copy: StandardMaterial3D = mat.duplicate()
 				mat_copy.stencil_mode = BaseMaterial3D.STENCIL_MODE_OUTLINE
@@ -487,7 +475,6 @@ func _clear_outline() -> void:
 			for i in range(surface_count):
 				mesh.set_surface_override_material(i, null)
 	outlined_meshes.clear()
-	original_materials.clear()
 
 
 ## MeshInstance3Dを再帰的に探す

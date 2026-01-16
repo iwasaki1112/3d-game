@@ -25,9 +25,8 @@ func to_dict() -> Dictionary:
 
 
 ## 辞書からResourceを作成
-static func from_dict(data: Dictionary) -> Resource:
-	var script = load("res://scripts/resources/context_menu_item.gd")
-	var res = script.new()
+static func from_dict(data: Dictionary) -> ContextMenuItem:
+	var res = ContextMenuItem.new()
 	res.action_id = data.get("action_id", "")
 	res.display_name = data.get("display_name", "")
 	res.enabled = data.get("enabled", true)
@@ -36,9 +35,8 @@ static func from_dict(data: Dictionary) -> Resource:
 
 
 ## 便利なファクトリーメソッド
-static func create(p_action_id: String, p_display_name: String, p_order: int = 0) -> Resource:
-	var script = load("res://scripts/resources/context_menu_item.gd")
-	var item = script.new()
+static func create(p_action_id: String, p_display_name: String, p_order: int = 0) -> ContextMenuItem:
+	var item = ContextMenuItem.new()
 	item.action_id = p_action_id
 	item.display_name = p_display_name
 	item.order = p_order

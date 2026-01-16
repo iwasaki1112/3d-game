@@ -8,9 +8,7 @@ enum Stance { STAND, CROUCH }
 enum Weapon { NONE, RIFLE, PISTOL }
 enum HitDirection { FRONT, BACK, LEFT, RIGHT }
 
-# Signals
-signal death_finished
-signal action_finished(action_name: String)
+# Signals (reserved for future use)
 
 # Export settings
 @export_group("Movement Speed")
@@ -49,8 +47,6 @@ var _weapon := Weapon.RIFLE
 var _is_aiming := false
 var _is_running := false
 var _is_dead := false
-var _is_playing_action := false
-var _current_action := ""
 var _aim_direction := Vector3.FORWARD  # 現在のエイム方向（視界計算用）
 
 # Death animation mapping
@@ -245,54 +241,7 @@ func play_death(hit_direction: HitDirection = HitDirection.FRONT, headshot: bool
 		_anim_player.animation_finished.connect(_on_death_animation_finished, CONNECT_ONE_SHOT)
 
 func _on_death_animation_finished(_anim_name: String) -> void:
-	death_finished.emit()
-
-## Play a generic action animation (for future animations like open_door, breach, etc.)
-## action_name: The animation name to play
-## stop_movement: If true, stops AnimationTree during action (default: true)
-## Returns: true if animation exists and started playing
-func play_action(action_name: String, stop_movement: bool = true) -> bool:
-	if _is_dead or _is_playing_action:
-		return false
-
-	if not _anim_player.has_animation(action_name):
-		push_warning("Animation not found: %s" % action_name)
-		return false
-
-	_is_playing_action = true
-	_current_action = action_name
-
-	if stop_movement and _anim_tree:
-		_anim_tree.active = false
-
-	_anim_player.play(action_name)
-	_anim_player.animation_finished.connect(_on_action_animation_finished, CONNECT_ONE_SHOT)
-	return true
-
-func _on_action_animation_finished(_anim_name: String) -> void:
-	var finished_action := _current_action
-	_is_playing_action = false
-	_current_action = ""
-
-	# Restore AnimationTree
-	if _anim_tree:
-		_anim_tree.active = true
-
-	action_finished.emit(finished_action)
-
-## Check if currently playing an action
-func is_playing_action() -> bool:
-	return _is_playing_action
-
-## Get current action name (empty if not playing)
-func get_current_action() -> String:
-	return _current_action
-
-## Get list of available animations (for debugging/tools)
-func get_available_animations() -> PackedStringArray:
-	if not _anim_player:
-		return PackedStringArray()
-	return _anim_player.get_animation_list()
+	pass  # Death animation completed
 
 #endregion
 

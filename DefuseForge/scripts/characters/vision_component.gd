@@ -5,7 +5,6 @@ extends Node3D
 ## Uses wall corner points for stable visibility calculation
 
 signal vision_updated(visible_points: PackedVector3Array)
-signal wall_hit_updated(hit_points: PackedVector3Array)
 
 # ============================================
 # Quality Presets (FogOfWarSystem.Qualityと連動)
@@ -36,7 +35,6 @@ const QUALITY_PRESETS := {
 # ============================================
 var _enabled: bool = true
 var _visible_polygon: PackedVector3Array = PackedVector3Array()
-var _wall_hit_points: PackedVector3Array = PackedVector3Array()
 var _time_since_update: float = 0.0
 
 # スナップ用（ピクピク防止）
@@ -103,11 +101,6 @@ func _physics_process(delta: float) -> void:
 ## Get the visible polygon (used by FogOfWarSystem)
 func get_visible_polygon() -> PackedVector3Array:
 	return _visible_polygon
-
-
-## Get wall hit points
-func get_wall_hit_points() -> PackedVector3Array:
-	return _wall_hit_points
 
 
 ## Force immediate vision update
@@ -234,7 +227,6 @@ func _calculate_shadow_cast_vision() -> void:
 
 	# Cast rays at each angle
 	_visible_polygon.clear()
-	_wall_hit_points.clear()
 
 	# First point is the origin
 	_visible_polygon.append(origin)
@@ -256,14 +248,12 @@ func _calculate_shadow_cast_vision() -> void:
 
 		if result:
 			_visible_polygon.append(result.position)
-			_wall_hit_points.append(result.position)
 		else:
 			_visible_polygon.append(end_point)
 
 	# スナップ済み位置/角度が変化した場合のみここに到達するのでシグナル発火
 	_has_valid_vision = true
 	vision_updated.emit(_visible_polygon)
-	wall_hit_updated.emit(_wall_hit_points)
 
 
 ## Collect wall corner points from scene (with caching)

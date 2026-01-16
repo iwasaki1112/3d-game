@@ -11,15 +11,10 @@ enum DrawingMode { MOVEMENT, VISION_POINT }
 ## 視線ポイントデータ
 ## { "path_ratio": float, "anchor": Vector3, "direction": Vector3 }
 
-signal drawing_started()
-signal drawing_updated(points: PackedVector3Array)
 signal drawing_finished(points: PackedVector3Array)
-signal path_execution_started(character: CharacterBody3D)
-signal path_execution_completed(character: CharacterBody3D)
 
 ## 視線ポイント用シグナル
 signal vision_point_added(anchor: Vector3, direction: Vector3)
-signal vision_point_drawing(anchor: Vector3, direction: Vector3)
 signal mode_changed(mode: int)  # 0=MOVEMENT, 1=VISION_POINT
 
 @export var min_point_distance: float = 0.2  # ポイント間の最小距離
@@ -146,7 +141,6 @@ func _handle_vision_point_input(event: InputEvent) -> void:
 			if ground_pos != null:
 				var direction = (ground_pos - _current_vision_anchor).normalized()
 				direction.y = 0
-				vision_point_drawing.emit(_current_vision_anchor, direction)
 				_update_temp_vision_marker(_current_vision_anchor, direction)
 
 
@@ -266,7 +260,6 @@ func _start_drawing(start_pos: Vector3) -> void:
 	_path_points.clear()
 	_path_points.append(start_pos)
 	_path_mesh.update_from_points(_path_points)
-	drawing_started.emit()
 
 
 func _add_point(pos: Vector3) -> void:
@@ -279,7 +272,6 @@ func _add_point(pos: Vector3) -> void:
 
 	_path_points.append(pos)
 	_path_mesh.update_from_points(_path_points)
-	drawing_updated.emit(_path_points)
 
 
 func _finish_drawing() -> void:
@@ -415,8 +407,6 @@ func execute(run: bool = false) -> bool:
 	if not _executing_character.path_completed.is_connected(_on_path_completed):
 		_executing_character.path_completed.connect(_on_path_completed)
 
-	path_execution_started.emit(_executing_character)
-
 	_pending_path.clear()
 	_pending_character = null
 
@@ -444,8 +434,6 @@ func execute_with_vision(run: bool = false) -> bool:
 	if not _executing_character.path_completed.is_connected(_on_path_completed):
 		_executing_character.path_completed.connect(_on_path_completed)
 
-	path_execution_started.emit(_executing_character)
-
 	var vision_count = _vision_points.size()
 	_pending_path.clear()
 	_vision_points.clear()
@@ -469,8 +457,6 @@ func _on_path_completed() -> void:
 	if _executing_character:
 		if _executing_character.path_completed.is_connected(_on_path_completed):
 			_executing_character.path_completed.disconnect(_on_path_completed)
-
-		path_execution_completed.emit(_executing_character)
 		_executing_character = null
 
 	clear()

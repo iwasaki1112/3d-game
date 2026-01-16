@@ -5,8 +5,6 @@ extends Control
 ## キャラクタータップ時にメニューを表示し、操作を選択させる
 ## モバイル（タッチ）とPC（マウス）両対応
 
-signal menu_opened(character: CharacterBody3D)
-signal menu_closed()
 signal item_selected(action_id: String, character: CharacterBody3D)
 
 const ContextMenuItemScript = preload("res://scripts/resources/context_menu_item.gd")
@@ -113,8 +111,6 @@ func open(screen_position: Vector2, character: CharacterBody3D) -> void:
 	_tween.tween_property(_panel, "modulate:a", 1.0, animation_duration)
 	_tween.tween_property(_panel, "scale", Vector2.ONE, animation_duration).set_ease(Tween.EASE_OUT)
 
-	menu_opened.emit(character)
-
 
 ## メニューを閉じる
 func close() -> void:
@@ -122,7 +118,6 @@ func close() -> void:
 		return
 
 	_is_open = false
-	var _character = _current_character
 	_current_character = null
 
 	# アニメーション
@@ -133,8 +128,6 @@ func close() -> void:
 	_tween.tween_property(_panel, "modulate:a", 0.0, animation_duration)
 	_tween.tween_property(_panel, "scale", Vector2(0.9, 0.9), animation_duration).set_ease(Tween.EASE_IN)
 	_tween.chain().tween_callback(hide)
-
-	menu_closed.emit()
 
 
 ## メニュー項目を追加

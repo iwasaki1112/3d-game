@@ -10,11 +10,8 @@ class_name GameCharacter
 enum Team { NONE = 0, COUNTER_TERRORIST = 1, TERRORIST = 2 }
 
 # ============================================
-# Signals
+# Signals (reserved for future use)
 # ============================================
-signal died(killer: Node3D)
-signal damaged(amount: float, attacker: Node3D, is_headshot: bool)
-signal healed(amount: float)
 
 # ============================================
 # Export Settings
@@ -56,7 +53,6 @@ func take_damage(amount: float, attacker: Node3D = null, is_headshot: bool = fal
 		return
 
 	current_health = max(0.0, current_health - amount)
-	damaged.emit(amount, attacker, is_headshot)
 
 	if current_health <= 0.0:
 		_die(attacker, is_headshot)
@@ -65,12 +61,7 @@ func take_damage(amount: float, attacker: Node3D = null, is_headshot: bool = fal
 func heal(amount: float) -> void:
 	if not is_alive:
 		return
-
-	var old_health := current_health
 	current_health = min(max_health, current_health + amount)
-
-	if current_health > old_health:
-		healed.emit(current_health - old_health)
 
 ## Get health ratio (0.0 - 1.0)
 func get_health_ratio() -> float:
@@ -149,8 +140,6 @@ func _die(killer: Node3D = null, is_headshot: bool = false) -> void:
 
 	# Disable collision
 	_disable_collision()
-
-	died.emit(killer)
 
 ## Calculate HitDirection from attacker position
 func _calculate_hit_direction(attacker: Node3D) -> int:

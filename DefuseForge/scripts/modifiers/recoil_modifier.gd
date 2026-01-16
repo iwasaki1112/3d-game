@@ -11,9 +11,6 @@ class_name RecoilModifier
 var _spine_bone_idx := -1
 var _current_recoil := 0.0
 
-func _validate_property(property: Dictionary) -> void:
-	pass
-
 func _ready() -> void:
 	_find_bone()
 
