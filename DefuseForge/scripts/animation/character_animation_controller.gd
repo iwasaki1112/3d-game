@@ -97,6 +97,15 @@ func setup(model: Node3D, anim_player: AnimationPlayer) -> void:
 	_setup_animation_tree()
 	call_deferred("_setup_upper_body_filter")
 
+	# 初期のエイム方向をモデルの前方向に設定
+	if _model:
+		_aim_direction = _model.global_transform.basis.z
+		_aim_direction.y = 0
+		if _aim_direction.length_squared() > 0.001:
+			_aim_direction = _aim_direction.normalized()
+		else:
+			_aim_direction = Vector3.FORWARD
+
 ## Main update function - call every frame
 func update_animation(
 	movement_direction: Vector3,
@@ -179,6 +188,17 @@ func is_dead() -> bool:
 ## Get current aim direction (for vision calculation)
 func get_look_direction() -> Vector3:
 	return _aim_direction
+
+
+## Set aim direction directly (for rotation mode)
+func set_look_direction(direction: Vector3) -> void:
+	if direction.length_squared() > 0.001:
+		_aim_direction = direction.normalized()
+		_aim_direction.y = 0
+		# モデルの向きを即座に更新（_update_model_rotationと同じ計算）
+		if _model:
+			var target_basis := Basis.looking_at(-_aim_direction, Vector3.UP)
+			_model.transform.basis = target_basis
 
 ## Play death animation
 ## hit_direction: Direction the hit came FROM (e.g., FRONT means shot from front, falls backward)

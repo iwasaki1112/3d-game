@@ -61,6 +61,84 @@ offset_right = 400.0
 offset_bottom = 200.0
 text = "Loading..."
 
+[node name="ControlPanel" type="VBoxContainer" parent="UI"]
+offset_left = 10.0
+offset_top = 220.0
+offset_right = 200.0
+offset_bottom = 400.0
+
+[node name="ManualControlButton" type="Button" parent="UI/ControlPanel"]
+custom_minimum_size = Vector2(180, 40)
+text = "Manual Control: ON"
+
+[node name="PathPanel" type="VBoxContainer" parent="UI"]
+visible = false
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -150.0
+offset_top = -180.0
+offset_right = 150.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="VisionLabel" type="Label" parent="UI/PathPanel"]
+horizontal_alignment = 1
+text = "Vision Points: 0"
+
+[node name="VisionHBox" type="HBoxContainer" parent="UI/PathPanel"]
+
+[node name="AddVisionButton" type="Button" parent="UI/PathPanel/VisionHBox"]
+custom_minimum_size = Vector2(140, 40)
+size_flags_horizontal = 3
+text = "Add Vision"
+
+[node name="UndoVisionButton" type="Button" parent="UI/PathPanel/VisionHBox"]
+custom_minimum_size = Vector2(140, 40)
+size_flags_horizontal = 3
+text = "Undo"
+
+[node name="ExecuteButton" type="Button" parent="UI/PathPanel"]
+custom_minimum_size = Vector2(0, 40)
+text = "Execute (Walk)"
+
+[node name="RunButton" type="Button" parent="UI/PathPanel"]
+custom_minimum_size = Vector2(0, 40)
+text = "Execute (Run)"
+
+[node name="CancelButton" type="Button" parent="UI/PathPanel"]
+custom_minimum_size = Vector2(0, 40)
+text = "Cancel"
+
+[node name="RotatePanel" type="VBoxContainer" parent="UI"]
+visible = false
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -150.0
+offset_top = -100.0
+offset_right = 150.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="RotateLabel" type="Label" parent="UI/RotatePanel"]
+horizontal_alignment = 1
+text = "Tap to set direction"
+
+[node name="RotateConfirmButton" type="Button" parent="UI/RotatePanel"]
+custom_minimum_size = Vector2(0, 40)
+text = "Confirm"
+
+[node name="RotateCancelButton" type="Button" parent="UI/RotatePanel"]
+custom_minimum_size = Vector2(0, 40)
+text = "Cancel"
+
 [node name="Wall" type="CSGBox3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 1, 0)
 use_collision = true
