@@ -10,11 +10,13 @@
 - `scenes/tests/test_animation_viewer.tscn` - アニメーション確認用
 - `scenes/tests/test_path_drawer.tscn` - パス描画・移動確認用
 - `scenes/tests/test_strafe.tscn` - ストレイフ（8方向移動）確認用
+- `scenes/tests/test_simple_mixamo.tscn` - Mixamoキャラクター＋StrafeAnimationController確認用
 
 ## ドキュメント
 `docs/godot/` 配下：
 - `architecture.md` - システムアーキテクチャ概要、コンポーネント依存関係、シグナルフロー
 - `character-api.md` - CharacterBase/CharacterAPI（選択、回転、移動、武器、アニメーション、IK、レーザー、視界、FogOfWar、レジストリ、ユーティリティクラス、リソース定義）
+- `strafe-animation-controller.md` - StrafeAnimationController API（8方向ストレイフ、エイム、武器切替、死亡、汎用アクション）
 - `skeleton-modifier-patterns.md` - SkeletonModifier3D、上半身回転、IK実行順序
 - `testing-guide.md` - テストシーンの使い方、デバッグツール
 
