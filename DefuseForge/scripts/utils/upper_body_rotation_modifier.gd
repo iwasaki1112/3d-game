@@ -40,12 +40,29 @@ func _process_modification() -> void:
 	var per_bone_pitch = pitch_angle / bone_count
 	var per_bone_recoil = recoil_angle / bone_count
 
+	# デバッグ: 最初のボーンの回転値を表示
+	if Engine.get_process_frames() % 30 == 0 and _spine_bone_indices.size() > 0:
+		var first_bone_idx = _spine_bone_indices[0]
+		var bone_name = skeleton.get_bone_name(first_bone_idx)
+		var before_rot = skeleton.get_bone_pose_rotation(first_bone_idx)
+		print("[Modifier] bone=%s, yaw=%.1f°, BEFORE quat=(%.3f,%.3f,%.3f,%.3f)" % [
+			bone_name, rad_to_deg(per_bone_yaw),
+			before_rot.x, before_rot.y, before_rot.z, before_rot.w])
+
 	for bone_idx in _spine_bone_indices:
 		var current_rotation = skeleton.get_bone_pose_rotation(bone_idx)
 		var twist = Quaternion(Vector3.UP, per_bone_yaw)  # 左右回転（ヨー）
 		var pitch = Quaternion(Vector3.RIGHT, per_bone_pitch)  # 上下照準（ピッチ）
 		var kick = Quaternion(Vector3.RIGHT, -per_bone_recoil)  # 後ろへ傾く（リコイル）
-		skeleton.set_bone_pose_rotation(bone_idx, current_rotation * twist * pitch * kick)
+		var new_rotation = current_rotation * twist * pitch * kick
+		skeleton.set_bone_pose_rotation(bone_idx, new_rotation)
+
+	# デバッグ: 適用後の値を表示
+	if Engine.get_process_frames() % 30 == 0 and _spine_bone_indices.size() > 0:
+		var first_bone_idx = _spine_bone_indices[0]
+		var after_rot = skeleton.get_bone_pose_rotation(first_bone_idx)
+		print("[Modifier] AFTER quat=(%.3f,%.3f,%.3f,%.3f)" % [
+			after_rot.x, after_rot.y, after_rot.z, after_rot.w])
 
 
 func _initialize() -> void:

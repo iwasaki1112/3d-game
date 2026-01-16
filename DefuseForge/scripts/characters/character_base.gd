@@ -30,11 +30,12 @@ signal weapon_changed(weapon_id: int)
 signal locomotion_changed(state: int)
 signal action_started(action_type: int)
 signal action_completed(action_type: int)
+signal crouch_changed(is_crouching: bool)
 
 ## エクスポート設定
 @export_group("移動設定")
-@export var base_walk_speed: float = 3.0
-@export var base_run_speed: float = 6.0
+@export var base_walk_speed: float = 1.5  ## アニメーション基準速度に合わせる
+@export var base_run_speed: float = 4.0   ## アニメーション基準速度に合わせる
 
 @export_group("HP設定")
 @export var max_health: float = 100.0
@@ -69,6 +70,15 @@ var _action_timer: float = 0.0
 ## 生存状態
 var is_alive: bool = true
 
+## しゃがみ状態
+var is_crouching: bool = false
+
+## しゃがみ設定
+const STAND_COLLISION_HEIGHT: float = 1.8
+const CROUCH_COLLISION_HEIGHT: float = 1.0
+const STAND_COLLISION_Y: float = 0.9
+const CROUCH_COLLISION_Y: float = 0.5
+
 ## 自動照準ターゲット
 var _current_target: CharacterBase = null
 
@@ -93,14 +103,10 @@ func _physics_process(delta: float) -> void:
 	# コンポーネント更新
 	if movement:
 		velocity = movement.update(delta)
-		# ストレイフブレンド座標を更新
-		_update_strafe_blend()
 		# アニメーション速度を移動速度に合わせる
 		if animation:
 			var current_speed = velocity.length()
 			animation.set_animation_speed(current_speed, movement.is_running)
-	if animation:
-		animation.update(delta)
 	if weapon:
 		weapon.update()
 		weapon.update_ik()
@@ -114,10 +120,34 @@ func _physics_process(delta: float) -> void:
 		# 自動照準更新
 		_update_auto_aim()
 
+	# ストレイフブレンド座標を更新（視線ポイント処理後に実行）
+	if movement:
+		_update_strafe_blend()
+
+	# アニメーション更新（ストレイフブレンド適用後）
+	if animation:
+		animation.update(delta)
+
+	# ルートモーションを適用（アニメーションの移動をキャラクターに反映）
+	_apply_root_motion()
+
 	# 敵の可視性を更新（プレイヤーの視界内にいるときのみ表示）
 	update_enemy_visibility()
 
 	move_and_slide()
+
+
+## _process()で最終的なボーン調整（レンダリング直前）
+func _process(_delta: float) -> void:
+	if not is_alive:
+		return
+
+	# 上半身回転を最終適用（アニメーション処理後に確実に適用）
+	if animation and skeleton:
+		animation.apply_final_upper_body_rotation()
+
+	# Hipsボーンオフセット補正（アニメーションのルートモーションを打ち消す）
+	_compensate_hips_offset()
 
 
 ## モデルとスケルトンを検索
@@ -454,6 +484,10 @@ func _update_strafe_blend() -> void:
 	if not movement or not animation:
 		return
 
+	# デバッグ出力
+	if Engine.get_process_frames() % 30 == 0 and movement.is_moving:
+		print("[CharBase] strafe_mode=%s, is_moving=%s" % [movement.strafe_mode, movement.is_moving])
+
 	# ストレイフモード時のみブレンド座標を更新
 	if movement.strafe_mode and movement.is_moving:
 		var blend = movement.get_strafe_blend()
@@ -478,6 +512,95 @@ func disable_strafe() -> void:
 		movement.disable_strafe_mode()
 	if animation:
 		animation.disable_strafe()
+
+
+## ========================================
+## ルートモーション / Hipsボーン補正
+## ========================================
+
+## アニメーションのルートモーションをキャラクターに適用（無効化）
+## 注: player.glbのアニメーションはrootボーントラックがないため、
+##     代わりに_compensate_hips_offset()でHipsボーンオフセットを補正
+func _apply_root_motion() -> void:
+	pass  # ルートモーション抽出は無効化（代わりにHips補正を使用）
+
+
+## Hipsボーンのオフセットを補正
+## アニメーションでHipsボーンが移動してもモデルがCharacterBody3Dに固定されるようにする
+func _compensate_hips_offset() -> void:
+	if skeleton == null or model == null:
+		return
+
+	# Hipsボーンを検索
+	var hips_idx := -1
+	for i in range(skeleton.get_bone_count()):
+		var bone_name = skeleton.get_bone_name(i)
+		var lower_name = bone_name.to_lower()
+		if "hip" in lower_name or "pelvis" in lower_name:
+			hips_idx = i
+			break
+
+	if hips_idx < 0:
+		return
+
+	# Hipsボーンのローカル位置を取得
+	var hips_pose_pos = skeleton.get_bone_pose_position(hips_idx)
+
+	# XZ平面でのオフセットを取得（Y軸は高さなので無視）
+	var offset_xz = Vector3(hips_pose_pos.x, 0, hips_pose_pos.z)
+
+	# オフセットが小さければ補正不要
+	if offset_xz.length_squared() < 0.001:
+		return
+
+	# Armatureノードを取得
+	var armature = skeleton.get_parent()
+	if armature == null:
+		return
+
+	# Armatureの位置を逆オフセットで調整（モデルをCharacterBody3Dに固定）
+	armature.position.x = -offset_xz.x
+	armature.position.z = -offset_xz.z
+
+
+## ========================================
+## しゃがみ API
+## ========================================
+
+## しゃがみ状態をトグル
+func toggle_crouch() -> void:
+	set_crouching(not is_crouching)
+
+
+## しゃがみ状態を設定
+func set_crouching(crouch: bool) -> void:
+	if is_crouching == crouch:
+		return
+
+	is_crouching = crouch
+	_update_collision_for_crouch()
+
+	if animation:
+		animation.set_crouching(is_crouching)
+
+	crouch_changed.emit(is_crouching)
+	print("[CharacterBase] Crouch state: %s" % ("CROUCHING" if is_crouching else "STANDING"))
+
+
+## しゃがみ時のコリジョン形状を更新
+func _update_collision_for_crouch() -> void:
+	var collision_shape = get_node_or_null("CollisionShape3D")
+	if collision_shape == null:
+		return
+
+	if collision_shape.shape is CapsuleShape3D:
+		var capsule = collision_shape.shape as CapsuleShape3D
+		if is_crouching:
+			capsule.height = CROUCH_COLLISION_HEIGHT
+			collision_shape.position.y = CROUCH_COLLISION_Y
+		else:
+			capsule.height = STAND_COLLISION_HEIGHT
+			collision_shape.position.y = STAND_COLLISION_Y
 
 
 ## ========================================
@@ -529,14 +652,33 @@ func _update_auto_aim() -> void:
 		set_upper_body_rotation(0.0, 0.0)
 
 
-## 視線ポイントに基づく回転の更新（Slice the Pie + ストレイフ）
+## 視線ポイントに基づく回転の更新（Slice the Pie + 上半身優先）
+## 上半身回転限界（度）
+const UPPER_BODY_ROTATION_LIMIT: float = 45.0
+
+## 現在の移動方向を取得（次のウェイポイントへの方向）
+func _get_current_move_direction() -> Vector3:
+	if not movement or not movement.is_moving:
+		return Vector3.ZERO
+
+	if movement.waypoints.is_empty() or movement.current_waypoint_index >= movement.waypoints.size():
+		return Vector3.ZERO
+
+	var current_pos = global_position
+	current_pos.y = 0
+	var target = movement.waypoints[movement.current_waypoint_index]
+	var target_xz = Vector3(target.x, 0, target.z)
+
+	var direction = (target_xz - current_pos).normalized()
+	return direction
+
 func _update_vision_point_rotation() -> void:
 	if not movement or not animation:
 		return
 
 	var vision_direction = movement.get_current_vision_direction()
 	if vision_direction == Vector3.ZERO:
-		# 視線ポイントがない場合はストレイフを無効化して上半身リセット
+		# 視線ポイントがない場合は通常歩行
 		if movement.strafe_mode:
 			disable_strafe()
 		set_upper_body_rotation(0.0, 0.0)
@@ -546,18 +688,50 @@ func _update_vision_point_rotation() -> void:
 	vision_direction.y = 0
 	vision_direction = vision_direction.normalized()
 
-	# ストレイフモードを有効化（視線方向に全身を向ける）
-	if not movement.strafe_mode:
-		movement.enable_strafe_mode(vision_direction)
+	# キャラクターの進行方向（下半身の向き）を取得
+	var forward = global_transform.basis.z  # +Zが前方
+	forward.y = 0
+	forward = forward.normalized()
 
-	# キャラクターを視線方向に向ける
-	rotation.y = atan2(vision_direction.x, vision_direction.z)
+	# vision方向の絶対角度を計算
+	var vision_angle = atan2(vision_direction.x, vision_direction.z)
 
-	# 視線方向を更新（MovementComponentに伝える）
-	movement._facing_direction = vision_direction
+	# 進行方向（次のウェイポイントへの方向）を取得
+	var move_direction = _get_current_move_direction()
+	if move_direction.length_squared() < 0.001:
+		move_direction = forward
 
-	# 上半身回転は0（全身が視線方向を向いているため）
-	set_upper_body_rotation(0.0, 0.0)
+	# 進行方向の絶対角度
+	var move_angle = atan2(move_direction.x, move_direction.z)
+
+	# 進行方向とvision方向の角度差
+	var angle_diff = rad_to_deg(wrapf(vision_angle - move_angle, -PI, PI))
+
+	# デバッグ出力
+	if Engine.get_process_frames() % 30 == 0:
+		print("[Vision] diff=%.1f, move_angle=%.1f, vision_angle=%.1f" % [
+			angle_diff, rad_to_deg(move_angle), rad_to_deg(vision_angle)])
+
+	if absf(angle_diff) <= UPPER_BODY_ROTATION_LIMIT:
+		# 上半身だけで対応可能 - 通常歩行 + 上半身回転
+		if movement.strafe_mode:
+			disable_strafe()
+		# 下半身は進行方向を向く（MovementComponent._rotate_toward()に任せる）
+		# 上半身をvision方向に回転
+		set_upper_body_rotation(-angle_diff, 0.0)
+	else:
+		# 上半身回転限界を超えた - 下半身も追従
+		# 下半身の目標角度 = vision角度 - sign(差分) * 45度
+		var body_target_angle = vision_angle - deg_to_rad(sign(angle_diff) * UPPER_BODY_ROTATION_LIMIT)
+		rotation.y = body_target_angle
+
+		# ストレイフモードを有効化（8方向移動）
+		if not movement.strafe_mode:
+			movement.enable_strafe_mode(vision_direction)
+		movement._facing_direction = vision_direction
+
+		# 上半身を限界角度まで回転
+		set_upper_body_rotation(-sign(angle_diff) * UPPER_BODY_ROTATION_LIMIT, 0.0)
 
 
 ## 視界内の敵を検出（FOV + 距離 + レイキャスト方式）

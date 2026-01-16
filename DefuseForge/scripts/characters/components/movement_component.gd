@@ -12,8 +12,9 @@ signal vision_direction_changed(direction: Vector3)  # 視線方向変更時
 
 const MovementMarkerScript = preload("res://scripts/effects/movement_marker.gd")
 
-@export var walk_speed: float = 3.0
-@export var run_speed: float = 6.0
+@export var walk_speed: float = 1.5  ## アニメーション基準速度に合わせる
+@export var run_speed: float = 4.0   ## アニメーション基準速度に合わせる
+@export var crouch_speed_multiplier: float = 0.5  ## しゃがみ時の速度補正
 @export var rotation_speed: float = 10.0
 @export var waypoint_threshold: float = 0.3
 @export var show_movement_marker: bool = true  ## 移動時にマーカーを表示するか
@@ -88,6 +89,7 @@ func set_path(points: Array[Vector3], run: bool = false) -> void:
 	current_waypoint_index = 0
 	is_running = run
 	is_moving = true
+	_use_input_mode = false  # パス追従モードに切り替え
 	_total_path_length = _calculate_path_length(points)
 	_current_distance_traveled = 0.0
 	_has_vision_points = false
@@ -113,6 +115,7 @@ func set_path_with_vision_points(movement_points: Array[Vector3], vision_pts: Ar
 	current_waypoint_index = 0
 	is_running = run
 	is_moving = true
+	_use_input_mode = false  # パス追従モードに切り替え
 	_total_path_length = _calculate_path_length(movement_points)
 	_current_distance_traveled = 0.0
 
@@ -129,6 +132,9 @@ func set_path_with_vision_points(movement_points: Array[Vector3], vision_pts: Ar
 	else:
 		_has_vision_points = false
 		_current_vision_direction = Vector3.ZERO
+
+	# パス開始時は進行方向を向く（Door Kickers 2仕様）
+	_initialize_facing_direction()
 
 	_update_locomotion_state()
 	_show_movement_marker()
@@ -192,10 +198,29 @@ func disable_strafe_mode() -> void:
 ## ストレイフブレンド座標を計算（キャラクターのローカル座標に投影）
 ## @return: Vector2(x, y) - x: 左右成分, y: 前後成分
 func get_strafe_blend() -> Vector2:
-	if not is_moving or _input_direction.length_squared() < 0.001:
-		return Vector2(0, 1)  # デフォルトは前進
-
 	if _character == null:
+		return Vector2(0, 1)
+
+	# 移動方向を取得
+	var move_dir: Vector3
+
+	if _use_input_mode:
+		# 入力モード: WASDの入力方向を使用
+		if not is_moving or _input_direction.length_squared() < 0.001:
+			return Vector2(0, 1)
+		move_dir = _input_direction.normalized()
+	else:
+		# パス追従モード: 次のウェイポイントへの方向を使用
+		if not is_moving or waypoints.is_empty() or current_waypoint_index >= waypoints.size():
+			return Vector2(0, 1)
+		var current_pos = _character.global_position
+		current_pos.y = 0
+		var target = waypoints[current_waypoint_index]
+		var target_xz = Vector3(target.x, 0, target.z)
+		move_dir = (target_xz - current_pos).normalized()
+
+	move_dir.y = 0
+	if move_dir.length_squared() < 0.001:
 		return Vector2(0, 1)
 
 	# キャラクターのローカル座標系を取得
@@ -213,10 +238,6 @@ func get_strafe_blend() -> Vector2:
 		char_right = char_right.normalized()
 	else:
 		char_right = Vector3.RIGHT
-
-	# 移動方向（ワールド座標）
-	var move_dir = _input_direction.normalized()
-	move_dir.y = 0
 
 	# 移動方向をキャラクターのローカル座標に投影
 	var forward_component = move_dir.dot(char_forward)  # 前後成分
@@ -269,8 +290,10 @@ func update(delta: float) -> Vector3:
 	# 回転処理
 	_rotate_toward(direction, delta)
 
-	# 速度計算
+	# 速度計算（しゃがみ時は遅くなる）
 	var speed = run_speed if is_running else walk_speed
+	if _character and "is_crouching" in _character and _character.is_crouching:
+		speed *= crouch_speed_multiplier
 	var velocity = direction * speed
 
 	# 移動距離を追跡（視線ポイント用）
@@ -294,7 +317,17 @@ func update(delta: float) -> Vector3:
 func get_current_speed() -> float:
 	if not is_moving:
 		return 0.0
-	return run_speed if is_running else walk_speed
+
+	var base_speed = run_speed if is_running else walk_speed
+
+	# しゃがみ時は速度を下げる
+	if _character and _character.has_method("is_crouching"):
+		# CharacterBaseはis_crouchingプロパティを持つ
+		pass
+	if _character and "is_crouching" in _character and _character.is_crouching:
+		base_speed *= crouch_speed_multiplier
+
+	return base_speed
 
 
 ## 目標方向に向かって回転
@@ -327,6 +360,8 @@ func _update_locomotion_state() -> void:
 ## リアルタイム入力モードの更新処理
 func _update_input_mode(delta: float) -> Vector3:
 	var speed = run_speed if is_running else walk_speed
+	if _character and "is_crouching" in _character and _character.is_crouching:
+		speed *= crouch_speed_multiplier
 	var velocity = _input_direction * speed
 
 	# ストレイフモードでなければ移動方向に回転
@@ -384,6 +419,22 @@ func clear_vision_points() -> void:
 	_has_vision_points = false
 	_current_distance_traveled = 0.0
 	_current_vision_direction = Vector3.ZERO
+
+
+## パス開始時の向きを初期化（進行方向を向く）
+func _initialize_facing_direction() -> void:
+	if _character == null or waypoints.size() < 1:
+		return
+
+	# 最初のwaypointへの方向を計算
+	var start_pos = _character.global_position
+	start_pos.y = 0
+	var first_target = Vector3(waypoints[0].x, 0, waypoints[0].z)
+	var initial_direction = (first_target - start_pos).normalized()
+
+	if initial_direction.length_squared() > 0.001:
+		_character.rotation.y = atan2(initial_direction.x, initial_direction.z)
+		print("[MovementComponent] Initial facing set to path direction")
 
 
 ## パスの総距離を計算

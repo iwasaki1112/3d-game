@@ -1,0 +1,53 @@
+[gd_scene load_steps=6 format=3 uid="uid://bsimpletps001"]
+
+[ext_resource type="Script" path="res://scripts/tests/simple_tps_player.gd" id="1_player"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_001"]
+radius = 0.4
+height = 1.8
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_001"]
+sky_top_color = Color(0.4, 0.6, 0.8, 1)
+sky_horizon_color = Color(0.7, 0.8, 0.9, 1)
+ground_bottom_color = Color(0.2, 0.2, 0.2, 1)
+ground_horizon_color = Color(0.5, 0.5, 0.5, 1)
+
+[sub_resource type="Sky" id="Sky_001"]
+sky_material = SubResource("ProceduralSkyMaterial_001")
+
+[sub_resource type="Environment" id="Environment_001"]
+background_mode = 2
+sky = SubResource("Sky_001")
+ambient_light_source = 2
+ambient_light_color = Color(0.8, 0.8, 0.8, 1)
+
+[node name="TestSimpleTPS" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_001")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, -0.25, 0.433, 0, 0.866, 0.5, -0.5, -0.433, 0.75, 0, 10, 0)
+shadow_enabled = true
+
+[node name="Player" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+script = ExtResource("1_player")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("CapsuleShape3D_001")
+
+[node name="Floor" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+use_collision = true
+size = Vector3(50, 1, 50)
+
+[node name="InfoLabel" type="Label" parent="."]
+offset_right = 400.0
+offset_bottom = 100.0
+text = "Simple TPS Demo
+WASD: Move
+Mouse: Look
+Right Click: Aim (Strafe)
+ESC: Release/Capture mouse"
