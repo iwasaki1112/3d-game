@@ -134,7 +134,17 @@ void fragment() {
 	add_child(_fog_mesh)
 
 
+var _pending_render_frames: int = 0
+
 func _process(_delta: float) -> void:
+	# 保留中のレンダリングフレームがある場合は再レンダリング
+	if _pending_render_frames > 0:
+		_pending_render_frames -= 1
+		if _visibility_viewport:
+			_visibility_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+			_fog_material.set_shader_parameter("visibility_texture", _visibility_viewport.get_texture())
+		return
+
 	# dirty flagがtrueのときのみ更新（シグナル駆動）
 	if not _needs_update:
 		return
@@ -142,10 +152,11 @@ func _process(_delta: float) -> void:
 	_update_visibility_texture()
 	_needs_update = false
 
-	# SubViewportを手動で再レンダリング要求
+	# SubViewportを手動で再レンダリング要求（2フレーム連続でレンダリング）
 	if _visibility_viewport:
 		_visibility_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 		_fog_material.set_shader_parameter("visibility_texture", _visibility_viewport.get_texture())
+		_pending_render_frames = 2  # 追加で2フレームレンダリング
 
 
 func _update_visibility_texture() -> void:
@@ -175,10 +186,9 @@ func _sync_polygon_count() -> void:
 		_visibility_viewport.add_child(polygon)
 		_visibility_polygons.append(polygon)
 
-	# 余剰分を削除
-	while _visibility_polygons.size() > _vision_components.size():
-		var polygon = _visibility_polygons.pop_back()
-		polygon.queue_free()
+	# 余剰分はクリアして非表示にする（削除しない）
+	for i in range(_vision_components.size(), _visibility_polygons.size()):
+		_visibility_polygons[i].polygon = PackedVector2Array()
 
 
 ## 3Dポリゴンを2Dテクスチャ座標に変換
@@ -204,7 +214,8 @@ func register_vision(vision) -> void:
 		_vision_components.append(vision)
 		# シグナル接続（視界更新時に通知を受ける）
 		if vision.has_signal("vision_updated"):
-			vision.vision_updated.connect(_on_vision_updated)
+			if not vision.vision_updated.is_connected(_on_vision_updated):
+				vision.vision_updated.connect(_on_vision_updated)
 		_needs_update = true
 
 
@@ -227,6 +238,11 @@ func _on_vision_updated(_visible_points: PackedVector3Array) -> void:
 func set_fog_visible(fog_visible: bool) -> void:
 	if _fog_mesh:
 		_fog_mesh.visible = fog_visible
+
+
+## 強制的に可視性テクスチャを更新
+func force_update() -> void:
+	_needs_update = true
 
 
 ## フォグの色を設定

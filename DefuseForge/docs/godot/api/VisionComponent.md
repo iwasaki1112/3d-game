@@ -82,6 +82,26 @@ Fog of Warシステム用の視界コンポーネント。シャドウキャス�
 
 **戻り値:** 有効なら`true`
 
+### is_position_in_view(world_pos: Vector3) -> bool
+指定位置が視界内か軽量判定する（単一レイキャスト）。EnemyVisibilitySystemの軽量モードで使用。
+
+**引数:**
+- `world_pos` - 判定対象のワールド座標
+
+**戻り値:** 視界内なら`true`
+
+**判定ロジック:**
+1. 距離チェック（view_distance以内か）
+2. FOV角度チェック（XZ平面で視野角内か）
+3. 壁遮蔽チェック（1本のレイキャストで障害物がないか）
+
+**使用例:**
+```gdscript
+# 敵位置が味方視界内かチェック
+if friendly.vision.is_position_in_view(enemy.global_position):
+    print("Enemy in sight!")
+```
+
 ## 使用例
 
 ```gdscript

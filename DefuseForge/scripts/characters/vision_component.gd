@@ -146,6 +146,46 @@ func is_enabled() -> bool:
 	return _enabled
 
 
+## Check if a world position is within FOV (lightweight check with single raycast)
+## Used for enemy visibility detection without full polygon calculation
+func is_position_in_view(world_pos: Vector3) -> bool:
+	if not _character:
+		return false
+
+	var origin := _get_eye_position()
+	var to_target := world_pos - origin
+	var distance := to_target.length()
+
+	# Distance check
+	if distance > view_distance:
+		return false
+
+	# FOV check (XZ plane)
+	var look_dir := _get_look_direction()
+	var to_target_xz := Vector3(to_target.x, 0, to_target.z).normalized()
+	var look_dir_xz := Vector3(look_dir.x, 0, look_dir.z).normalized()
+
+	if to_target_xz.length_squared() < 0.001 or look_dir_xz.length_squared() < 0.001:
+		return true  # Target is directly above/below or look direction is vertical
+
+	var angle := rad_to_deg(look_dir_xz.angle_to(to_target_xz))
+	if angle > fov_degrees / 2.0:
+		return false
+
+	# Wall occlusion check (single raycast)
+	var space_state := get_world_3d().direct_space_state
+	if not space_state:
+		return false
+
+	var query := PhysicsRayQueryParameters3D.create(origin, world_pos, wall_collision_mask)
+	if _character is CollisionObject3D:
+		query.exclude = [_character.get_rid()]
+
+	var result := space_state.intersect_ray(query)
+
+	return result.is_empty()
+
+
 # ============================================
 # Shadow Cast Vision Calculation
 # ============================================

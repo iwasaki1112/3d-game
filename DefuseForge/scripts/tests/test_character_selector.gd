@@ -189,12 +189,14 @@ func _apply_vision_state() -> void:
 	if fog_of_war_system:
 		fog_of_war_system.set_fog_visible(is_vision_enabled)
 
-	# EnemyVisibilitySystemの有効/無効を切り替え
+	# EnemyVisibilitySystemのモードを切り替え
 	if enemy_visibility_system:
 		if is_vision_enabled:
-			enemy_visibility_system.enable()
+			# FoW ON: 詳細な視界ポリゴンベースの判定
+			enemy_visibility_system.enable_full()
 		else:
-			enemy_visibility_system.disable()
+			# FoW OFF: 軽量なレイキャストベースの判定（97%レイ削減）
+			enemy_visibility_system.enable_lightweight()
 
 
 ## パス確定ボタン：現在のパスを保存

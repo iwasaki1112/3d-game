@@ -59,6 +59,9 @@ VisionComponentを解除する。
 
 **戻り値:** ViewportTextureまたは`null`
 
+### force_update() -> void
+強制的に可視性テクスチャを更新する。VisionComponentの再登録後などに使用。
+
 ## 使用例
 
 ```gdscript
