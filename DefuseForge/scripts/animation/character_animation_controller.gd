@@ -1,7 +1,7 @@
 extends Node
-class_name StrafeAnimationController
-## Strafe Animation Controller API
-## Provides simple interface for 8-directional strafe movement with aiming
+class_name CharacterAnimationController
+## Character Animation Controller API
+## Provides simple interface for character animations (movement, aiming, combat, death)
 
 # Enums
 enum Stance { STAND, CROUCH }

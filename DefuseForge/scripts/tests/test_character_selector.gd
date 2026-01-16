@@ -2,7 +2,7 @@ extends Node3D
 ## Test scene for character selection
 ## Debug tool to test different characters from CharacterRegistry
 
-const AnimCtrl = preload("res://scripts/animation/strafe_animation_controller.gd")
+const AnimCtrl = preload("res://scripts/animation/character_animation_controller.gd")
 
 @onready var camera: Camera3D = $Camera3D
 @onready var character_dropdown: OptionButton = $UI/CharacterDropdown

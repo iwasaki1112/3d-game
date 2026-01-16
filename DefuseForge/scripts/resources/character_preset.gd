@@ -3,7 +3,7 @@ class_name CharacterPreset
 ## Character preset definition
 ## Stores character metadata for team-based selection
 
-const MixamoCharacterScript = preload("res://scripts/characters/mixamo_character.gd")
+const GameCharacterScript = preload("res://scripts/characters/game_character.gd")
 
 # ============================================
 # Basic Info
@@ -17,7 +17,7 @@ const MixamoCharacterScript = preload("res://scripts/characters/mixamo_character
 # Team
 # ============================================
 @export_group("Team")
-@export var team: MixamoCharacterScript.Team = MixamoCharacterScript.Team.NONE
+@export var team: GameCharacterScript.Team = GameCharacterScript.Team.NONE
 
 # ============================================
 # Model

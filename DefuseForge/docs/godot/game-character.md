@@ -1,18 +1,18 @@
-# MixamoCharacter API
+# GameCharacter API
 
-シンプルなキャラクター状態管理クラス。StrafeAnimationControllerと組み合わせて使用。
+シンプルなキャラクター状態管理クラス。CharacterAnimationControllerと組み合わせて使用。
 
 ## ファイル
-- `scripts/characters/mixamo_character.gd`
+- `scripts/characters/game_character.gd`
 
 ## 概要
 
-MixamoCharacterは最小限の機能のみを提供:
+GameCharacterは最小限の機能のみを提供:
 - HP管理（ダメージ、回復、死亡）
 - チーム所属
 - 死亡状態管理
 
-アニメーション制御はStrafeAnimationControllerに完全に委譲。
+アニメーション制御はCharacterAnimationControllerに完全に委譲。
 
 ## API
 
@@ -38,7 +38,7 @@ signal healed(amount: float)
 ```gdscript
 var current_health: float = 100.0
 var is_alive: bool = true
-var anim_ctrl: Node = null  # StrafeAnimationController
+var anim_ctrl: Node = null  # CharacterAnimationController
 ```
 
 ### HP API
@@ -51,7 +51,7 @@ func reset_health() -> void
 
 ### チーム API
 ```gdscript
-func is_enemy_of(other: MixamoCharacter) -> bool
+func is_enemy_of(other: GameCharacter) -> bool
 ```
 
 ### アニメーションコントローラー連携
@@ -65,7 +65,7 @@ func get_anim_controller() -> Node
 ### 基本的な使用
 
 ```gdscript
-extends MixamoCharacter
+extends GameCharacter
 
 const AnimCtrl = preload("res://scripts/animation/strafe_animation_controller.gd")
 
@@ -115,9 +115,9 @@ if character.is_enemy_of(other_character):
 
 `take_damage()`でHPが0以下になると自動的に:
 1. `is_alive = false` に設定
-2. StrafeAnimationController経由で死亡アニメーション再生
+2. CharacterAnimationController経由で死亡アニメーション再生
 3. コリジョン無効化
 4. `died`シグナル発火
 
 ## 参照
-- [StrafeAnimationController API](strafe-animation-controller.md)
+- [CharacterAnimationController API](api/character-animation-controller.md)

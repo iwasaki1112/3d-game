@@ -35,7 +35,7 @@ assets/
 @export var description: String     # 説明文
 
 # Team
-@export var team: MixamoCharacter.Team  # NONE=0, CT=1, T=2
+@export var team: GameCharacter.Team  # NONE=0, CT=1, T=2
 
 # Model
 @export var model_scene: PackedScene    # キャラクターモデル
@@ -87,11 +87,11 @@ var character = CharacterRegistry.create_character_from_preset(preset, spawn_pos
 
 生成されるキャラクターの構造：
 ```
-MixamoCharacter
+GameCharacter
 ├── CharacterModel (model_scene)
 │   └── AnimationPlayer
 ├── CollisionShape3D
-└── StrafeAnimationController
+└── CharacterAnimationController
 ```
 
 ## 新しいキャラクター追加手順
@@ -146,5 +146,5 @@ func _on_character_selected(preset: CharacterPreset):
 ```
 
 ## 参照
-- [MixamoCharacter API](mixamo-character.md)
-- [StrafeAnimationController API](strafe-animation-controller.md)
+- [GameCharacter API](game-character.md)
+- [CharacterAnimationController API](api/character-animation-controller.md)

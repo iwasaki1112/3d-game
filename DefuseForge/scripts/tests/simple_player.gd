@@ -1,8 +1,8 @@
-extends MixamoCharacter
-## Simple Mixamo player using AnimCtrl API
-## Demonstrates the clean API usage with MixamoCharacter
+extends GameCharacter
+## Simple player using AnimCtrl API
+## Demonstrates the clean API usage with GameCharacter
 
-const AnimCtrl = preload("res://scripts/animation/strafe_animation_controller.gd")
+const AnimCtrl = preload("res://scripts/animation/character_animation_controller.gd")
 
 @onready var model: Node3D = $CharacterModel
 @onready var anim_player: AnimationPlayer = $CharacterModel/AnimationPlayer
@@ -20,7 +20,7 @@ func _ready() -> void:
 	anim_ctrl.setup(model, anim_player)
 	anim_ctrl.set_weapon(AnimCtrl.Weapon.RIFLE)
 
-	# Register controller with MixamoCharacter
+	# Register controller with GameCharacter
 	set_anim_controller(anim_ctrl)
 
 func _input(event: InputEvent) -> void:
@@ -38,7 +38,7 @@ func _input(event: InputEvent) -> void:
 		elif event.keycode == KEY_2:
 			anim_ctrl.set_weapon(AnimCtrl.Weapon.PISTOL)
 		elif event.keycode == KEY_K:
-			take_damage(max_health)  # Instant kill via MixamoCharacter
+			take_damage(max_health)  # Instant kill via GameCharacter
 
 func _physics_process(delta: float) -> void:
 	if not is_alive:

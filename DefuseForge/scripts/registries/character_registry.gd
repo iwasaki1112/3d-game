@@ -2,12 +2,12 @@ extends Node
 ## Character Registry - Manages all character presets
 ## Use as Autoload singleton (CharacterRegistry)
 
-const MixamoCharacterScript = preload("res://scripts/characters/mixamo_character.gd")
+const GameCharacterScript = preload("res://scripts/characters/game_character.gd")
 const CharacterPresetScript = preload("res://scripts/resources/character_preset.gd")
-const StrafeAnimCtrl = preload("res://scripts/animation/strafe_animation_controller.gd")
+const CharAnimCtrl = preload("res://scripts/animation/character_animation_controller.gd")
 
 ## Shared animation library source (GLB with character and all animations)
-const ANIMATION_SOURCE := "res://assets/animations/mixamo_character_anims.glb"
+const ANIMATION_SOURCE := "res://assets/animations/character_anims.glb"
 var _animation_library: AnimationLibrary = null
 
 # ============================================
@@ -37,7 +37,7 @@ func _ready() -> void:
 	_load_presets_from_directory()
 
 func _init_team_arrays() -> void:
-	for team in MixamoCharacterScript.Team.values():
+	for team in GameCharacterScript.Team.values():
 		_by_team[team] = []
 
 ## Load shared animation library from blend file
@@ -147,22 +147,22 @@ func get_all() -> Array:
 	return _presets.values()
 
 ## Get presets by team
-func get_by_team(team: MixamoCharacterScript.Team) -> Array:
+func get_by_team(team: GameCharacterScript.Team) -> Array:
 	return _by_team.get(team, [])
 
 ## Get all Terrorist presets
 func get_terrorists() -> Array:
-	return get_by_team(MixamoCharacterScript.Team.TERRORIST)
+	return get_by_team(GameCharacterScript.Team.TERRORIST)
 
 ## Get all Counter-Terrorist presets
 func get_counter_terrorists() -> Array:
-	return get_by_team(MixamoCharacterScript.Team.COUNTER_TERRORIST)
+	return get_by_team(GameCharacterScript.Team.COUNTER_TERRORIST)
 
 # ============================================
 # Factory API
 # ============================================
 
-## Create a MixamoCharacter instance from preset
+## Create a GameCharacter instance from preset
 ## Returns null if preset not found or model_scene not set
 func create_character(preset_id: String, position: Vector3 = Vector3.ZERO) -> Node:
 	var preset := get_preset(preset_id)
@@ -172,7 +172,7 @@ func create_character(preset_id: String, position: Vector3 = Vector3.ZERO) -> No
 
 	return create_character_from_preset(preset, position)
 
-## Create a MixamoCharacter instance from preset object
+## Create a GameCharacter instance from preset object
 func create_character_from_preset(preset: CharacterPresetScript, position: Vector3 = Vector3.ZERO) -> Node:
 	if not preset.model_scene:
 		push_error("CharacterRegistry: Preset has no model_scene: %s" % preset.id)
@@ -181,8 +181,8 @@ func create_character_from_preset(preset: CharacterPresetScript, position: Vecto
 	# Instance the model scene
 	var model := preset.model_scene.instantiate()
 
-	# Create MixamoCharacter as parent
-	var character := MixamoCharacterScript.new()
+	# Create GameCharacter as parent
+	var character := GameCharacterScript.new()
 	character.name = preset.id
 	character.max_health = preset.max_health
 	character.team = preset.team
@@ -216,7 +216,7 @@ func create_character_from_preset(preset: CharacterPresetScript, position: Vecto
 		anim_player.add_animation_library("", _animation_library)
 
 	# Setup animation controller (deferred until added to scene tree)
-	var anim_ctrl := StrafeAnimCtrl.new()
+	var anim_ctrl := CharAnimCtrl.new()
 	anim_ctrl.walk_speed = preset.walk_speed
 	anim_ctrl.run_speed = preset.run_speed
 	character.add_child(anim_ctrl)

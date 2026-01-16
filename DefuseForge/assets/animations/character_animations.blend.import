@@ -4,12 +4,12 @@ importer="scene"
 importer_version=1
 type="PackedScene"
 uid="uid://dw4i2uv81bgll"
-path="res://.godot/imported/mixamo_animations.blend-abf8f25f012d38e3bb1888daebcafbf9.scn"
+path="res://.godot/imported/character_animations.blend-8ecdfcd90f7537d9a62f6c2ae88e9d9a.scn"
 
 [deps]
 
-source_file="res://assets/animations/mixamo_animations.blend"
-dest_files=["res://.godot/imported/mixamo_animations.blend-abf8f25f012d38e3bb1888daebcafbf9.scn"]
+source_file="res://assets/animations/character_animations.blend"
+dest_files=["res://.godot/imported/character_animations.blend-8ecdfcd90f7537d9a62f6c2ae88e9d9a.scn"]
 
 [params]
 

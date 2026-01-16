@@ -1,17 +1,17 @@
-# StrafeAnimationController API
+# CharacterAnimationController API
 
-8方向ストレイフ移動アニメーションを簡単に実装するためのAPIクラス。
+キャラクターアニメーション（移動、エイム、戦闘、死亡）を管理するAPIクラス。
 内部の複雑さ（AnimationTree、BlendSpace2D、ボーンフィルタ等）を隠蔽し、シンプルなインターフェースを提供する。
 
 ## ファイル
-- `scripts/animation/strafe_animation_controller.gd`
+- `scripts/animation/character_animation_controller.gd`
 
 ---
 
 ## クイックスタート
 
 ```gdscript
-const AnimCtrl = preload("res://scripts/animation/strafe_animation_controller.gd")
+const AnimCtrl = preload("res://scripts/animation/character_animation_controller.gd")
 
 var anim_ctrl: Node
 
@@ -332,7 +332,7 @@ door.open()
 ```gdscript
 extends CharacterBody3D
 
-const AnimCtrl = preload("res://scripts/animation/strafe_animation_controller.gd")
+const AnimCtrl = preload("res://scripts/animation/character_animation_controller.gd")
 
 @onready var model: Node3D = $CharacterModel
 @onready var anim_player: AnimationPlayer = $CharacterModel/AnimationPlayer

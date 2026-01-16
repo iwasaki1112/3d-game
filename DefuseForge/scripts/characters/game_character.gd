@@ -1,8 +1,8 @@
 extends CharacterBody3D
-class_name MixamoCharacter
-## Simple Mixamo character management class
+class_name GameCharacter
+## Character management class
 ## Provides HP, death state, and team management
-## Works with StrafeAnimationController for animations
+## Works with CharacterAnimationController for animations
 
 # ============================================
 # Team Definition
@@ -34,7 +34,7 @@ var is_alive: bool = true
 # ============================================
 # References
 # ============================================
-var anim_ctrl: Node = null  # StrafeAnimationController
+var anim_ctrl: Node = null  # CharacterAnimationController
 
 # ============================================
 # Lifecycle
@@ -85,7 +85,7 @@ func reset_health() -> void:
 # ============================================
 
 ## Check if target is enemy team
-func is_enemy_of(other: MixamoCharacter) -> bool:
+func is_enemy_of(other: GameCharacter) -> bool:
 	if other == null:
 		return false
 	if team == Team.NONE or other.team == Team.NONE:
@@ -96,11 +96,11 @@ func is_enemy_of(other: MixamoCharacter) -> bool:
 # Animation Controller API
 # ============================================
 
-## Set StrafeAnimationController
+## Set CharacterAnimationController
 func set_anim_controller(controller: Node) -> void:
 	anim_ctrl = controller
 
-## Get StrafeAnimationController
+## Get CharacterAnimationController
 func get_anim_controller() -> Node:
 	return anim_ctrl
 
@@ -111,7 +111,7 @@ func get_anim_controller() -> Node:
 func _die(killer: Node3D = null, is_headshot: bool = false) -> void:
 	is_alive = false
 
-	# Play death animation via StrafeAnimationController
+	# Play death animation via CharacterAnimationController
 	if anim_ctrl and anim_ctrl.has_method("play_death"):
 		var hit_dir := _calculate_hit_direction(killer)
 		anim_ctrl.play_death(hit_dir, is_headshot)
@@ -135,7 +135,7 @@ func _calculate_hit_direction(attacker: Node3D) -> int:
 
 	var angle := rad_to_deg(forward.signed_angle_to(to_attacker, Vector3.UP))
 
-	# StrafeAnimationController.HitDirection
+	# CharacterAnimationController.HitDirection
 	# FRONT = 0, BACK = 1, LEFT = 2, RIGHT = 3
 	if abs(angle) < 45:
 		return 0  # FRONT
