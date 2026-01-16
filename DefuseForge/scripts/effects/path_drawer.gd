@@ -302,6 +302,13 @@ func _clear_vision_points() -> void:
 	_vision_meshes.clear()
 
 
+## 視線マーカーの所有権を移譲（呼び出し元が管理責任を持つ）
+func take_vision_markers() -> Array[MeshInstance3D]:
+	var markers = _vision_meshes.duplicate()
+	_vision_meshes.clear()
+	return markers
+
+
 func get_drawn_path() -> PackedVector3Array:
 	return _path_points
 

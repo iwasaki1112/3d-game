@@ -187,6 +187,13 @@ func get_current_character() -> CharacterBody3D:
 	return _current_character
 
 
+## パネルの矩形を取得（画面座標）
+func get_panel_rect() -> Rect2:
+	if _panel:
+		return Rect2(_panel.global_position, _panel.size)
+	return Rect2()
+
+
 ## ボタンを再構築
 func _rebuild_buttons() -> void:
 	# 既存ボタンをクリア（即座に削除してサイズを正しく計算）

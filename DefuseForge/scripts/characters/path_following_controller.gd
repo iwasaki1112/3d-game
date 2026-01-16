@@ -13,6 +13,11 @@ signal path_completed()
 signal path_cancelled()
 signal vision_point_reached(index: int, direction: Vector3)
 
+## スタック検出設定
+@export var stuck_threshold: float = 0.05  ## この距離以下の移動をスタックとみなす
+@export var stuck_timeout: float = 0.3  ## この時間スタックしたら次のポイントへスキップ
+@export var final_destination_radius: float = 0.5  ## 最終目的地への到達判定半径
+
 ## 内部状態
 var _character: CharacterBody3D = null
 var _is_following: bool = false
@@ -23,6 +28,10 @@ var _vision_points: Array[Dictionary] = []
 var _vision_index: int = 0
 var _forced_look_direction: Vector3 = Vector3.ZERO
 var _last_move_direction: Vector3 = Vector3.ZERO
+
+## スタック検出用
+var _last_position: Vector3 = Vector3.ZERO
+var _stuck_time: float = 0.0
 
 
 ## セットアップ
@@ -52,6 +61,8 @@ func start_path(path: Array[Vector3], vision_points: Array[Dictionary] = [], run
 	_is_following = true
 	_forced_look_direction = Vector3.ZERO
 	_last_move_direction = Vector3.ZERO
+	_last_position = _character.global_position
+	_stuck_time = 0.0
 
 	path_started.emit()
 	return true
@@ -94,6 +105,32 @@ func process(delta: float) -> void:
 	var to_target = target - char_pos
 	to_target.y = 0
 	var distance = to_target.length()
+
+	# 最終目的地への距離を計算
+	var final_target = _current_path[_current_path.size() - 1]
+	var to_final = final_target - char_pos
+	to_final.y = 0
+	var distance_to_final = to_final.length()
+
+	# 最終目的地に十分近ければ完了
+	if distance_to_final < final_destination_radius:
+		_finish()
+		return
+
+	# スタック検出：移動距離が閾値以下なら時間を加算
+	var moved_distance = char_pos.distance_to(_last_position)
+	if moved_distance < stuck_threshold * delta * 60:  # deltaを考慮
+		_stuck_time += delta
+		if _stuck_time >= stuck_timeout:
+			# 中間地点でスタック → 次のポイントにスキップ
+			_path_index += 1
+			_stuck_time = 0.0
+			if _path_index >= _current_path.size():
+				_finish()
+				return
+	else:
+		_stuck_time = 0.0
+	_last_position = char_pos
 
 	# 目標点に到達したら次へ
 	if distance < 0.15:
@@ -189,12 +226,19 @@ func _calculate_path_progress() -> float:
 
 ## パス追従完了
 func _finish() -> void:
-	# 完了時に最後の向きを維持
-	if _character and _last_move_direction.length_squared() > 0.1:
+	# キャラクターの速度を停止
+	if _character:
+		_character.velocity = Vector3.ZERO
+
+	# 完了時に最後の向きを維持してアイドル状態に
+	if _character:
 		var anim_ctrl = _character.get_anim_controller()
 		if anim_ctrl:
 			var final_dir = _forced_look_direction if _forced_look_direction.length_squared() > 0.1 else _last_move_direction
-			anim_ctrl.update_animation(Vector3.ZERO, final_dir, false, 0.0)
+			if final_dir.length_squared() < 0.1:
+				final_dir = Vector3.FORWARD
+			# アイドル状態に遷移（移動方向をゼロに）
+			anim_ctrl.update_animation(Vector3.ZERO, final_dir, false, 0.016)
 
 	_is_following = false
 	_current_path.clear()

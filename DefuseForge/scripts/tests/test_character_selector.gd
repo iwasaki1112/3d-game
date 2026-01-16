@@ -23,12 +23,16 @@ const RotationCtrl = preload("res://scripts/characters/character_rotation_contro
 @onready var vision_label: Label = $UI/PathPanel/VisionLabel
 @onready var add_vision_button: Button = $UI/PathPanel/VisionHBox/AddVisionButton
 @onready var undo_vision_button: Button = $UI/PathPanel/VisionHBox/UndoVisionButton
-@onready var execute_button: Button = $UI/PathPanel/ExecuteButton
-@onready var run_button: Button = $UI/PathPanel/RunButton
+@onready var confirm_path_button: Button = $UI/PathPanel/ConfirmButton
 @onready var cancel_button: Button = $UI/PathPanel/CancelButton
 @onready var rotate_panel: VBoxContainer = $UI/RotatePanel
 @onready var rotate_confirm_button: Button = $UI/RotatePanel/RotateConfirmButton
 @onready var rotate_cancel_button: Button = $UI/RotatePanel/RotateCancelButton
+## 実行ボタン（外出し）
+@onready var pending_paths_label: Label = $UI/ControlPanel/PendingPathsLabel
+@onready var execute_walk_button: Button = $UI/ControlPanel/ExecuteWalkButton
+@onready var execute_run_button: Button = $UI/ControlPanel/ExecuteRunButton
+@onready var clear_paths_button: Button = $UI/ControlPanel/ClearPathsButton
 
 var current_character: Node = null
 var selected_character: Node = null  ## 現在選択中のキャラクター
@@ -46,9 +50,17 @@ var is_vision_enabled: bool = true  ## 視界/FoWの有効化（デフォルトO
 ## パスシステム
 var path_drawer: Node3D = null
 var is_path_mode: bool = false  ## パス描画モード中
+var path_editing_character: Node = null  ## 現在パスを編集中のキャラクター
+
+## 保留中のパス（キャラクターごと）
+## { character_id: { "character": Node, "path": Array[Vector3], "vision_points": Array, "path_mesh": Node3D } }
+var pending_paths: Dictionary = {}
+
+## パスメッシュスクリプト
+const PathLineMeshScript = preload("res://scripts/effects/path_line_mesh.gd")
 
 ## コントローラー
-var path_following_controller: Node = null
+var path_following_controllers: Dictionary = {}  ## character_id -> PathFollowingController
 var rotation_controller: Node = null
 
 func _ready() -> void:
@@ -60,20 +72,11 @@ func _ready() -> void:
 	_populate_dropdown()
 	character_dropdown.item_selected.connect(_on_character_selected)
 
-	# Spawn first character
-	if character_dropdown.item_count > 0:
-		_on_character_selected(0)
+	# Spawn 2 CT characters at different positions
+	_spawn_initial_characters()
 
 
 func _setup_controllers() -> void:
-	# PathFollowingController
-	path_following_controller = Node.new()
-	path_following_controller.set_script(PathFollowingCtrl)
-	path_following_controller.name = "PathFollowingController"
-	add_child(path_following_controller)
-	path_following_controller.path_completed.connect(_on_path_following_completed)
-	path_following_controller.path_cancelled.connect(_on_path_following_cancelled)
-
 	# CharacterRotationController
 	rotation_controller = Node.new()
 	rotation_controller.set_script(RotationCtrl)
@@ -81,6 +84,22 @@ func _setup_controllers() -> void:
 	add_child(rotation_controller)
 	rotation_controller.rotation_confirmed.connect(_on_rotation_confirmed)
 	rotation_controller.rotation_cancelled.connect(_on_rotation_cancelled)
+
+
+## キャラクター用のPathFollowingControllerを取得または作成
+func _get_or_create_path_controller(character: Node) -> Node:
+	var char_id = character.get_instance_id()
+	if path_following_controllers.has(char_id):
+		return path_following_controllers[char_id]
+
+	var controller = Node.new()
+	controller.set_script(PathFollowingCtrl)
+	controller.name = "PathFollowingController_%d" % char_id
+	add_child(controller)
+	controller.path_completed.connect(_on_path_following_completed.bind(character))
+	controller.path_cancelled.connect(_on_path_following_cancelled.bind(character))
+	path_following_controllers[char_id] = controller
+	return controller
 
 
 func _setup_context_menu() -> void:
@@ -115,13 +134,18 @@ func _setup_control_buttons() -> void:
 	add_vision_button.pressed.connect(_on_add_vision_button_pressed)
 	undo_vision_button.pressed.connect(_on_undo_vision_button_pressed)
 
-	# パス操作ボタン
-	execute_button.pressed.connect(_on_execute_button_pressed)
-	run_button.pressed.connect(_on_run_button_pressed)
+	# パス確定/キャンセルボタン
+	confirm_path_button.pressed.connect(_on_confirm_path_button_pressed)
 	cancel_button.pressed.connect(_on_cancel_button_pressed)
 
 	# 視線ポイント追加シグナル
 	path_drawer.vision_point_added.connect(_on_vision_point_added)
+
+	# 実行ボタン（外出し）
+	execute_walk_button.pressed.connect(_on_execute_walk_button_pressed)
+	execute_run_button.pressed.connect(_on_execute_run_button_pressed)
+	clear_paths_button.pressed.connect(_on_clear_paths_button_pressed)
+	_update_pending_paths_label()
 
 	# 回転モードボタン
 	rotate_confirm_button.pressed.connect(_on_rotate_confirm_pressed)
@@ -180,16 +204,29 @@ func _apply_vision_state() -> void:
 		fog_of_war_system.set_fog_visible(is_vision_enabled)
 
 
-func _on_execute_button_pressed() -> void:
-	_execute_path(false)
+## パス確定ボタン：現在のパスを保存
+func _on_confirm_path_button_pressed() -> void:
+	_confirm_current_path()
 
 
-func _on_run_button_pressed() -> void:
-	_execute_path(true)
-
-
+## キャンセルボタン
 func _on_cancel_button_pressed() -> void:
 	_cancel_path_mode()
+
+
+## 全員歩き実行ボタン
+func _on_execute_walk_button_pressed() -> void:
+	_execute_all_paths(false)
+
+
+## 全員走り実行ボタン
+func _on_execute_run_button_pressed() -> void:
+	_execute_all_paths(true)
+
+
+## 全パスクリアボタン
+func _on_clear_paths_button_pressed() -> void:
+	_clear_all_pending_paths()
 
 
 func _on_add_vision_button_pressed() -> void:
@@ -270,6 +307,36 @@ func _on_character_selected(index: int) -> void:
 	var preset_id: String = character_dropdown.get_item_metadata(index)
 	_spawn_character(preset_id)
 
+
+## 初期キャラクター2体を生成
+func _spawn_initial_characters() -> void:
+	var cts = CharacterRegistry.get_counter_terrorists()
+	if cts.size() < 1:
+		print("[Test] No CT characters available")
+		return
+
+	# 1体目のCT（位置: -2, 0, 0）
+	var char1 = CharacterRegistry.create_character(cts[0].id, Vector3(-2, 0, 0))
+	if char1:
+		add_child(char1)
+		characters.append(char1)
+		_setup_character_vision_for(char1)
+		print("[Test] Spawned CT 1: %s at (-2, 0, 0)" % cts[0].display_name)
+
+	# 2体目のCT（位置: 2, 0, 0）- 同じか別のCTプリセットを使用
+	var ct_index = 1 if cts.size() > 1 else 0
+	var char2 = CharacterRegistry.create_character(cts[ct_index].id, Vector3(2, 0, 0))
+	if char2:
+		add_child(char2)
+		characters.append(char2)
+		_setup_character_vision_for(char2)
+		print("[Test] Spawned CT 2: %s at (2, 0, 0)" % cts[ct_index].display_name)
+
+	# 最初のキャラクターをcurrent_characterに設定
+	if characters.size() > 0:
+		current_character = characters[0]
+		_update_info_label(cts[0].id)
+
 func _spawn_character(preset_id: String) -> void:
 	# Unregister old vision from FoW
 	if current_character and current_character.vision and fog_of_war_system:
@@ -295,9 +362,16 @@ func _spawn_character(preset_id: String) -> void:
 func _setup_character_vision() -> void:
 	if not current_character:
 		return
+	_setup_character_vision_for(current_character)
+
+
+## 指定したキャラクターの視界をセットアップ
+func _setup_character_vision_for(character: Node) -> void:
+	if not character:
+		return
 
 	# Setup vision component
-	var vision = current_character.setup_vision(90.0, 15.0)
+	var vision = character.setup_vision(90.0, 15.0)
 
 	# Register with FoW system
 	if fog_of_war_system and vision:
@@ -344,8 +418,10 @@ func _unhandled_input(event: InputEvent) -> void:
 func _input(event: InputEvent) -> void:
 	# ESCキー処理（モードキャンセル）
 	if event.is_action_pressed("ui_cancel"):
-		if is_path_mode or path_following_controller.is_following_path():
+		if is_path_mode:
 			_cancel_path_mode()
+		elif _any_path_following_active():
+			_cancel_all_path_following()
 		elif rotation_controller.is_rotation_active():
 			_on_rotate_cancel_pressed()
 
@@ -376,20 +452,80 @@ func _input(event: InputEvent) -> void:
 					_on_character_selected(index)
 
 
+## パス追従中のコントローラーがあるかチェック
+func _any_path_following_active() -> bool:
+	for controller in path_following_controllers.values():
+		if controller.is_following_path():
+			return true
+	return false
+
+
+## 指定キャラクターがパス追従中かチェック
+func _is_character_following_path(character: Node) -> bool:
+	if not character:
+		return false
+	var char_id = character.get_instance_id()
+	if path_following_controllers.has(char_id):
+		return path_following_controllers[char_id].is_following_path()
+	return false
+
+
+## パス追従していないキャラクターのアイドル状態を更新
+func _update_idle_characters(delta: float) -> void:
+	for character in characters:
+		# パス追従中はスキップ
+		if _is_character_following_path(character):
+			continue
+		# 選択中のキャラクターは後で別処理
+		if character == selected_character:
+			continue
+		# 死亡中はスキップ
+		if not character.is_alive:
+			continue
+
+		var anim_ctrl = character.get_anim_controller()
+		if anim_ctrl:
+			var look_dir = anim_ctrl.get_look_direction()
+			anim_ctrl.update_animation(Vector3.ZERO, look_dir, false, delta)
+
+
+## 全てのパス追従をキャンセル
+func _cancel_all_path_following() -> void:
+	for controller in path_following_controllers.values():
+		if controller.is_following_path():
+			controller.cancel()
+	_update_mode_info("")
+	print("[PathSystem] Cancelled all path following")
+
+
 ## マウスクリック処理
 func _handle_mouse_click(event: InputEventMouseButton) -> void:
-	# コンテキストメニューが開いている場合は閉じる処理に任せる
+	# コンテキストメニューが開いている場合、メニューUI上のクリックは無視
 	if context_menu and context_menu.is_open():
-		return
+		if _is_point_over_context_menu(event.position):
+			return
 
 	var clicked_character = _raycast_character(event.position)
 
 	match event.button_index:
 		MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT:
-			# クリック: キャラクター選択 + コンテキストメニュー表示
 			if clicked_character:
+				# キャラクタークリック: 選択 + コンテキストメニュー表示
 				_select_character(clicked_character)
 				_show_context_menu(event.position, clicked_character)
+			else:
+				# キャラクター以外をクリック: メニューを閉じて選択解除
+				if context_menu and context_menu.is_open():
+					context_menu.close()
+				_deselect_character()
+
+
+## マウス位置がコンテキストメニュー上かどうか
+func _is_point_over_context_menu(screen_pos: Vector2) -> bool:
+	if not context_menu or not context_menu.is_open():
+		return false
+	var panel_rect = context_menu.get_panel_rect()
+	return panel_rect.has_point(screen_pos)
 
 
 ## レイキャストでキャラクターを検出
@@ -437,6 +573,13 @@ func _select_character(character: Node) -> void:
 		_update_info_label(preset_id)
 	# 選択アウトラインを表示
 	_show_selection_outline(character)
+
+
+## キャラクターの選択を解除
+func _deselect_character() -> void:
+	selected_character = null
+	_clear_outline()
+	info_label.text = "Tap a character to select"
 
 
 ## 選択アウトラインを表示
@@ -530,6 +673,7 @@ func _on_context_menu_item_selected(action_id: String, character: CharacterBody3
 func _start_move_mode(character: Node) -> void:
 	print("[ContextMenu] Move mode for: ", character.name)
 	is_path_mode = true
+	path_editing_character = character
 	path_drawer.enable(character)
 	_update_mode_info("Path Mode: Draw path with mouse (ESC to cancel)")
 
@@ -550,10 +694,13 @@ func _toggle_crouch(character: Node) -> void:
 		print("[ContextMenu] Toggled crouch: ", character.name)
 
 func _physics_process(delta: float) -> void:
-	# パス追従中はコントローラーに処理を委譲
-	if path_following_controller.is_following_path():
-		path_following_controller.process(delta)
-		return
+	# 全パス追従コントローラーを処理
+	for controller in path_following_controllers.values():
+		if controller.is_following_path():
+			controller.process(delta)
+
+	# パス追従していない全キャラクターのアイドル状態を維持
+	_update_idle_characters(delta)
 
 	# 回転モード中はコントローラーに処理を委譲
 	if rotation_controller.is_rotation_active():
@@ -566,6 +713,10 @@ func _physics_process(delta: float) -> void:
 	if not selected_character.is_alive:
 		return
 
+	# パス追従中のキャラクターは手動操作をスキップ
+	if _is_character_following_path(selected_character):
+		return
+
 	var anim_ctrl = selected_character.get_anim_controller()
 	if not anim_ctrl:
 		return
@@ -574,9 +725,10 @@ func _physics_process(delta: float) -> void:
 	if is_debug_control_enabled:
 		_update_aim_position()
 
-	# パスモード中は移動入力を無効化
+	# パスモード中は現在の向きを維持
 	if is_path_mode:
-		anim_ctrl.update_animation(Vector3.ZERO, aim_position - selected_character.global_position, false, delta)
+		var current_look_dir = anim_ctrl.get_look_direction()
+		anim_ctrl.update_animation(Vector3.ZERO, current_look_dir, false, delta)
 		return
 
 	# デバッグ操作が無効の場合は入力を無視（現在の向きを維持）
@@ -672,9 +824,14 @@ func _on_path_mode_changed(mode: int) -> void:
 		_update_path_panel_visibility()
 
 
-## パスを実行
-func _execute_path(run: bool) -> void:
+## 現在編集中のパスを確定して保存
+func _confirm_current_path() -> void:
 	if not path_drawer.has_pending_path():
+		_cancel_path_mode()
+		return
+
+	if not path_editing_character:
+		print("[PathSystem] No character for path")
 		_cancel_path_mode()
 		return
 
@@ -686,33 +843,128 @@ func _execute_path(run: bool) -> void:
 
 	var vision_points = path_drawer.get_vision_points().duplicate()
 
-	# パス追従するキャラクターを設定
-	var character = selected_character as CharacterBody3D
-	if not character:
-		print("[PathSystem] No valid character for path following")
-		_cancel_path_mode()
-		return
+	# 視線マーカーの所有権を取得（clear前に）
+	var vision_markers = path_drawer.take_vision_markers()
 
-	# コントローラーをセットアップして開始
-	path_following_controller.setup(character)
-	if not path_following_controller.start_path(path, vision_points, run):
-		print("[PathSystem] Failed to start path following")
-		_cancel_path_mode()
-		return
+	# 既存のパスがあれば削除
+	var char_id = path_editing_character.get_instance_id()
+	if pending_paths.has(char_id):
+		var old_data = pending_paths[char_id]
+		if old_data.has("path_mesh") and is_instance_valid(old_data["path_mesh"]):
+			old_data["path_mesh"].queue_free()
+		if old_data.has("vision_markers"):
+			for marker in old_data["vision_markers"]:
+				if is_instance_valid(marker):
+					marker.queue_free()
 
+	# パスメッシュを作成（表示用）
+	var path_mesh = _create_path_mesh(path)
+
+	# キャラクターIDでパスを保存
+	pending_paths[char_id] = {
+		"character": path_editing_character,
+		"path": path,
+		"vision_points": vision_points,
+		"path_mesh": path_mesh,
+		"vision_markers": vision_markers
+	}
+
+	print("[PathSystem] Saved path for %s: %d points, %d vision points" % [
+		path_editing_character.name, path.size(), vision_points.size()
+	])
+
+	# パスモードを終了（パスメッシュと視線マーカーは保持）
 	is_path_mode = false
+	path_editing_character = null
+	path_drawer.clear()
 	path_drawer.disable()
 
 	if path_panel:
 		path_panel.visible = false
-	_update_mode_info("Following path...")
-	print("[PathSystem] Started path following with %d points, %d vision points" % [path.size(), vision_points.size()])
+	_update_mode_info("")
+	_update_pending_paths_label()
+
+
+## パスメッシュを作成
+func _create_path_mesh(path: Array[Vector3]) -> MeshInstance3D:
+	var mesh = MeshInstance3D.new()
+	mesh.set_script(PathLineMeshScript)
+	mesh.line_color = Color(0.3, 0.8, 1.0, 0.8)  # 確定パスは水色
+	mesh.line_width = 0.04
+	add_child(mesh)
+
+	# パスを描画
+	var packed_path = PackedVector3Array()
+	for point in path:
+		packed_path.append(point)
+	mesh.update_from_points(packed_path)
+
+	return mesh
+
+
+## 全キャラクターのパスを同時実行
+func _execute_all_paths(run: bool) -> void:
+	if pending_paths.is_empty():
+		print("[PathSystem] No pending paths to execute")
+		return
+
+	var executed_count = 0
+	for char_id in pending_paths:
+		var data = pending_paths[char_id]
+		var character = data["character"] as CharacterBody3D
+		var path = data["path"]
+		var vision_points = data["vision_points"]
+
+		if not is_instance_valid(character):
+			continue
+
+		# コントローラーを取得または作成
+		var controller = _get_or_create_path_controller(character)
+		controller.setup(character)
+
+		if controller.start_path(path, vision_points, run):
+			executed_count += 1
+			print("[PathSystem] Started path for %s" % character.name)
+		else:
+			print("[PathSystem] Failed to start path for %s" % character.name)
+
+	# パスメッシュは全員完了後に削除（_on_path_following_completedで処理）
+	# パスデータのみクリア（メッシュは残す）
+	for char_id in pending_paths:
+		var data = pending_paths[char_id]
+		data.erase("path")
+		data.erase("vision_points")
+		data.erase("character")
+
+	_update_pending_paths_label()
+	_update_mode_info("Executing %d paths..." % executed_count)
+	print("[PathSystem] Executed %d paths" % executed_count)
+
+
+## 全ての保留パスをクリア
+func _clear_all_pending_paths() -> void:
+	_clear_all_path_meshes()
+	pending_paths.clear()
+	_update_pending_paths_label()
+	print("[PathSystem] Cleared all pending paths")
+
+
+## 全てのパスメッシュと視線マーカーを削除
+func _clear_all_path_meshes() -> void:
+	for char_id in pending_paths:
+		var data = pending_paths[char_id]
+		if data.has("path_mesh") and is_instance_valid(data["path_mesh"]):
+			data["path_mesh"].queue_free()
+		if data.has("vision_markers"):
+			for marker in data["vision_markers"]:
+				if is_instance_valid(marker):
+					marker.queue_free()
 
 
 ## パスモードをキャンセル
 func _cancel_path_mode() -> void:
 	is_path_mode = false
-	path_following_controller.cancel()
+	path_editing_character = null
 	path_drawer.clear()
 	path_drawer.disable()
 	_update_mode_info("")
@@ -721,15 +973,32 @@ func _cancel_path_mode() -> void:
 	print("[PathSystem] Path mode cancelled")
 
 
+## 保留パス数ラベルを更新
+func _update_pending_paths_label() -> void:
+	if pending_paths_label:
+		pending_paths_label.text = "Pending: %d paths" % pending_paths.size()
+
+
 ## パス追従完了時のコールバック
-func _on_path_following_completed() -> void:
-	_update_mode_info("")
-	print("[PathSystem] Path following completed")
+func _on_path_following_completed(character: Node) -> void:
+	print("[PathSystem] Path following completed for %s" % character.name)
+	# 全てのコントローラーが完了したかチェック
+	var any_active = false
+	for controller in path_following_controllers.values():
+		if controller.is_following_path():
+			any_active = true
+			break
+	if not any_active:
+		# 全員完了したのでパスメッシュを削除
+		_clear_all_path_meshes()
+		pending_paths.clear()
+		_update_mode_info("")
+		print("[PathSystem] All paths completed, meshes cleared")
 
 
 ## パス追従キャンセル時のコールバック
-func _on_path_following_cancelled() -> void:
-	print("[PathSystem] Path following cancelled")
+func _on_path_following_cancelled(character: Node) -> void:
+	print("[PathSystem] Path following cancelled for %s" % character.name)
 
 
 ## モード情報を更新

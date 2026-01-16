@@ -9,7 +9,7 @@
 開発途中。Mixamo専用のキャラクターシステム。
 
 テストシーン：
-- `scenes/tests/test_character.tscn` - キャラクター選択・パス移動・FoWテスト用
+- `scenes/tests/test_character.tscn` - 複数キャラクターのパス移動・視線設定・同時実行テスト用
 - `scenes/tests/test_simple_mixamo.tscn` - Mixamoキャラクター＋CharacterAnimationController確認用
 
 ## ドキュメント
@@ -26,7 +26,7 @@
 | Animation | RecoilModifier | SkeletonModifier3Dで発射時の反動を適用 |
 | Character | GameCharacter | HP・チーム・死亡処理を管理するCharacterBody3D |
 | Character | VisionComponent | シャドウキャスト法でFoW用の可視ポリゴンを計算 |
-| Character | PathFollowingController | パス追従＋視線ポイント管理を行う再利用可能コントローラー |
+| Character | PathFollowingController | パス追従＋視線ポイント＋スタック検出を行う再利用可能コントローラー |
 | Character | CharacterRotationController | 視線方向変更のスムーズな回転制御 |
 | Effect | PathDrawer | マウスドラッグでパス描画＋視線ポイント設定 |
 | Effect | PathLineMesh | 破線＋終点ドーナツ円のパスメッシュ描画 |
