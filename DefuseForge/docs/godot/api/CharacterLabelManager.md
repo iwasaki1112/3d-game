@@ -93,6 +93,32 @@ var count = label_manager.get_label_count()
 print("味方: %d体" % count)
 ```
 
+### set_label_color(character: Node, color: Color) -> void
+
+キャラクターのラベル背景色を変更する。CharacterColorManagerと連携してキャラクター固有色を適用する際に使用。
+
+```gdscript
+var char_color = CharacterColorManager.get_character_color(character)
+label_manager.set_label_color(character, char_color)
+```
+
+**引数:**
+- `character` - 対象キャラクター
+- `color` - 背景色（アルファは0.9に設定される）
+
+### set_label_text(character: Node, label_char: String) -> void
+
+キャラクターのラベルテキストを更新する。CharacterColorManagerと連携してラベル文字を設定する際に使用。
+
+```gdscript
+var label_char = CharacterColorManager.get_character_label(character)
+label_manager.set_label_text(character, label_char)
+```
+
+**引数:**
+- `character` - 対象キャラクター
+- `label_char` - 新しいラベル文字（A-F）
+
 ## 使用例
 
 ```gdscript
@@ -138,3 +164,4 @@ func remove_character(character: Node) -> void:
 ## 依存クラス
 
 - `PlayerState` - 敵味方判定（`is_enemy()`）
+- `CharacterColorManager` - キャラクター個別色取得（オプション連携）

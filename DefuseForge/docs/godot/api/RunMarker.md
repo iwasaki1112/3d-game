@@ -42,6 +42,19 @@ Run区間の開始/終点を示すマーカー。開始点は三角再生アイ�
 ### get_marker_type() -> MarkerType
 現在のマーカータイプを取得する。
 
+### set_colors(bg_color: Color, fg_color: Color) -> void
+マーカーの色を変更する。キャラクター個別色を適用する際に使用。
+
+**引数:**
+- `bg_color` - 背景円の色
+- `fg_color` - アイコンの色
+
+```gdscript
+# キャラクター色を適用
+var char_color = CharacterColorManager.get_character_color(character)
+marker.set_colors(char_color, Color.WHITE)
+```
+
 ## 使用例
 
 ```gdscript
@@ -78,3 +91,4 @@ marker.set_position_and_type(
 
 - `PathDrawer` - Run区間設定モードでRunMarkerを生成
 - `PathFollowingController` - Run区間内で走行速度を適用
+- `CharacterColorManager` - キャラクター個別色の取得

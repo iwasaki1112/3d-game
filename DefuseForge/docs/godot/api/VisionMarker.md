@@ -64,3 +64,8 @@ marker.set_colors(Color.BLACK, Color.YELLOW)
 - 矢印: 発光有効（energy 1.2）, `render_priority = 10`
 
 フォグより上にレンダリングされるため、常に視認可能。
+
+## 関連クラス
+
+- `PathDrawer` - 視線ポイント設定モードでVisionMarkerを生成
+- `CharacterColorManager` - キャラクター個別色の取得

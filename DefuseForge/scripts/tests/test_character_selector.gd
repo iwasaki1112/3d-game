@@ -336,6 +336,45 @@ func _setup_label_manager() -> void:
 	add_child(label_manager)
 
 
+## キャラクターに色を割り当てラベルを設定
+func _assign_character_color_and_label(character: Node) -> void:
+	if not character:
+		return
+
+	# 敵キャラクターには色を割り当てない
+	if PlayerState.is_enemy(character):
+		return
+
+	# 色を割り当て
+	var color_index = CharacterColorManager.assign_color(character)
+	if color_index == -1:
+		# 色が割り当てられなかった場合はデフォルトラベルのみ
+		label_manager.add_label(character)
+		return
+
+	# ラベルを追加
+	label_manager.add_label(character)
+
+	# ラベルに色とテキストを適用
+	var color = CharacterColorManager.get_character_color(character)
+	var label_char = CharacterColorManager.get_character_label(character)
+	label_manager.set_label_color(character, color)
+	label_manager.set_label_text(character, label_char)
+
+
+## チーム変更時に色とラベルを再割り当て
+func _refresh_character_colors() -> void:
+	# 全ての色割り当てをクリア
+	CharacterColorManager.clear_all()
+
+	# 全ラベルをクリア
+	label_manager.clear_all()
+
+	# 味方キャラクターに色とラベルを再割り当て
+	for character in characters:
+		_assign_character_color_and_label(character)
+
+
 func _setup_fog_of_war() -> void:
 	fog_of_war_system = Node3D.new()
 	fog_of_war_system.set_script(FogOfWarSystemScript)
@@ -365,7 +404,7 @@ func _on_team_selected(index: int) -> void:
 	var new_team: GameCharacter.Team = character_dropdown.get_item_metadata(index)
 	PlayerState.set_player_team(new_team)
 	_deselect_all()  # 敵を選択中だった場合に解除
-	label_manager.refresh_labels(characters)  # ラベルを更新（味方のみ表示）
+	_refresh_character_colors()  # 色を再割り当て（味方のみ）
 	_refresh_info_label()
 
 
@@ -382,7 +421,7 @@ func _spawn_initial_characters() -> void:
 			add_child(ct1)
 			characters.append(ct1)
 			_setup_character_vision_for(ct1)
-			label_manager.add_label(ct1)
+			_assign_character_color_and_label(ct1)
 			print("[Test] Spawned CT 1: %s at (-3, 0, -2)" % cts[0].display_name)
 
 		# 2体目のCT（位置: -3, 0, 2）
@@ -392,7 +431,7 @@ func _spawn_initial_characters() -> void:
 			add_child(ct2)
 			characters.append(ct2)
 			_setup_character_vision_for(ct2)
-			label_manager.add_label(ct2)
+			_assign_character_color_and_label(ct2)
 			print("[Test] Spawned CT 2: %s at (-3, 0, 2)" % cts[ct_index].display_name)
 	else:
 		print("[Test] No CT characters available")
@@ -405,7 +444,7 @@ func _spawn_initial_characters() -> void:
 			add_child(t1)
 			characters.append(t1)
 			_setup_character_vision_for(t1)
-			label_manager.add_label(t1)
+			_assign_character_color_and_label(t1)
 			print("[Test] Spawned T 1: %s at (3, 0, -2)" % ts[0].display_name)
 
 		# 2体目のT（位置: 3, 0, 2）
@@ -415,7 +454,7 @@ func _spawn_initial_characters() -> void:
 			add_child(t2)
 			characters.append(t2)
 			_setup_character_vision_for(t2)
-			label_manager.add_label(t2)
+			_assign_character_color_and_label(t2)
 			print("[Test] Spawned T 2: %s at (3, 0, 2)" % ts[t_index].display_name)
 	else:
 		print("[Test] No T characters available")
@@ -431,9 +470,10 @@ func _spawn_character(preset_id: String) -> void:
 	if current_character and current_character.vision and fog_of_war_system:
 		fog_of_war_system.unregister_vision(current_character.vision)
 
-	# Remove current character label
+	# Remove current character label and release color
 	if current_character:
 		label_manager.remove_label(current_character)
+		CharacterColorManager.release_color(current_character)
 
 	# Remove current character
 	if current_character:
@@ -448,7 +488,7 @@ func _spawn_character(preset_id: String) -> void:
 		characters.append(current_character)
 		_deselect_all()  # 生成時は未選択状態
 		_setup_character_vision()
-		label_manager.add_label(current_character)
+		_assign_character_color_and_label(current_character)
 		_update_info_label(preset_id)
 
 
@@ -880,6 +920,10 @@ func _start_move_mode(_character: Node) -> void:
 	path_editing_character = primary_character
 	path_drawer.enable(primary_character)
 
+	# プライマリキャラクターの色をPathDrawerに設定
+	var char_color = CharacterColorManager.get_character_color(primary_character)
+	path_drawer.set_character_color(char_color)
+
 	if selected_characters.size() == 1:
 		_update_mode_info("Path Mode: Draw path (ESC to cancel)")
 	else:
@@ -1099,8 +1143,8 @@ func _confirm_current_path() -> void:
 		var adjusted_vision_points = _adjust_ratios_for_connection(base_vision_points, connect_length, base_length)
 		var adjusted_run_segments = _adjust_run_ratios_for_connection(base_run_segments, connect_length, base_length)
 
-		# パスメッシュを作成（各キャラクターごと）
-		var path_mesh = _create_path_mesh(full_path)
+		# パスメッシュを作成（各キャラクターごと、キャラクター色適用）
+		var path_mesh = _create_path_mesh(full_path, character)
 
 		if first_char_id == -1:
 			# 最初のキャラクター：マーカーを保持
@@ -1214,21 +1258,24 @@ func _clear_pending_path_for_character(char_id: int) -> void:
 	pending_paths.erase(char_id)
 
 
-## 視線マーカーを複製
-func _duplicate_vision_markers(vision_points: Array[Dictionary]) -> Array[MeshInstance3D]:
+## 視線マーカーを複製（キャラクター色対応）
+func _duplicate_vision_markers(vision_points: Array[Dictionary], character: Node = null) -> Array[MeshInstance3D]:
 	var markers: Array[MeshInstance3D] = []
+	var char_color = CharacterColorManager.get_character_color(character) if character else Color.WHITE
 	for vp in vision_points:
 		var marker = MeshInstance3D.new()
 		marker.set_script(preload("res://scripts/effects/vision_marker.gd"))
 		add_child(marker)
 		marker.set_position_and_direction(vp.anchor, vp.direction)
+		marker.set_colors(char_color, Color.WHITE)
 		markers.append(marker)
 	return markers
 
 
-## Runマーカーを複製
-func _duplicate_run_markers(path: Array[Vector3], run_segments: Array[Dictionary]) -> Array[MeshInstance3D]:
+## Runマーカーを複製（キャラクター色対応）
+func _duplicate_run_markers(path: Array[Vector3], run_segments: Array[Dictionary], character: Node = null) -> Array[MeshInstance3D]:
 	var markers: Array[MeshInstance3D] = []
+	var char_color = CharacterColorManager.get_character_color(character) if character else Color.ORANGE
 
 	# パス上の位置を計算するためのヘルパー
 	var total_length: float = 0.0
@@ -1245,6 +1292,7 @@ func _duplicate_run_markers(path: Array[Vector3], run_segments: Array[Dictionary
 		start_marker.set_script(preload("res://scripts/effects/run_marker.gd"))
 		add_child(start_marker)
 		start_marker.set_position_and_type(start_pos, 0)  # START = 0
+		start_marker.set_colors(char_color, Color.WHITE)
 		markers.append(start_marker)
 
 		# 終点マーカー
@@ -1253,6 +1301,7 @@ func _duplicate_run_markers(path: Array[Vector3], run_segments: Array[Dictionary
 		end_marker.set_script(preload("res://scripts/effects/run_marker.gd"))
 		add_child(end_marker)
 		end_marker.set_position_and_type(end_pos, 1)  # END = 1
+		end_marker.set_colors(char_color, Color.WHITE)
 		markers.append(end_marker)
 
 	return markers
@@ -1280,11 +1329,18 @@ func _get_position_at_ratio(path: Array[Vector3], lengths: Array[float], total_l
 	return path[-1]
 
 
-## パスメッシュを作成
-func _create_path_mesh(path: Array[Vector3]) -> MeshInstance3D:
+## パスメッシュを作成（キャラクター色対応）
+func _create_path_mesh(path: Array[Vector3], character: Node = null) -> MeshInstance3D:
 	var mesh = MeshInstance3D.new()
 	mesh.set_script(PathLineMeshScript)
-	mesh.line_color = Color(0.3, 0.8, 1.0, 0.8)  # 確定パスは水色
+
+	# キャラクター色を適用（ない場合はデフォルト水色）
+	if character:
+		var char_color = CharacterColorManager.get_character_color(character)
+		mesh.line_color = Color(char_color.r, char_color.g, char_color.b, 0.8)
+	else:
+		mesh.line_color = Color(0.3, 0.8, 1.0, 0.8)
+
 	mesh.line_width = 0.04
 	add_child(mesh)
 

@@ -63,6 +63,9 @@ var _pending_path: PackedVector3Array = PackedVector3Array()
 var _pending_character: CharacterBody3D = null
 var _executing_character: CharacterBody3D = null
 
+## キャラクター色
+var _character_color: Color = Color(1.0, 1.0, 1.0)  # デフォルト白
+
 
 func _ready() -> void:
 	_ground_plane = Plane(Vector3.UP, ground_plane_height)
@@ -217,6 +220,9 @@ func _create_run_marker(pos: Vector3, type: int) -> void:
 	# マーカーの位置とタイプを設定
 	marker.set_position_and_type(pos, type)
 
+	# キャラクター色を適用
+	marker.set_colors(_character_color, Color.WHITE)
+
 
 func _get_ground_position(screen_pos: Vector2) -> Variant:
 	var ray_origin = _camera.project_ray_origin(screen_pos)
@@ -335,6 +341,9 @@ func _create_vision_marker(anchor: Vector3, direction: Vector3) -> void:
 	# マーカーの位置と方向を設定
 	marker.set_position_and_direction(anchor, direction)
 
+	# キャラクター色を適用
+	marker.set_colors(_character_color, Color.WHITE)
+
 
 ## 一時的な視線マーカーを更新（ドラッグ中）
 func _update_temp_vision_marker(anchor: Vector3, direction: Vector3) -> void:
@@ -349,6 +358,8 @@ func _update_temp_vision_marker(anchor: Vector3, direction: Vector3) -> void:
 		add_child(marker)
 		_vision_meshes.append(marker)
 		marker.set_position_and_direction(anchor, direction)
+		# キャラクター色を適用
+		marker.set_colors(_character_color, Color.WHITE)
 
 
 func _start_drawing(start_pos: Vector3) -> void:
@@ -483,6 +494,14 @@ func set_line_color(color: Color) -> void:
 	line_color = color
 	if _path_mesh:
 		_path_mesh.set_line_color(color)
+
+
+## キャラクター色を設定（パス線・マーカーに適用）
+## @param color: キャラクター固有色
+func set_character_color(color: Color) -> void:
+	_character_color = color
+	# パス線の色も更新
+	set_line_color(Color(color.r, color.g, color.b, 0.9))
 
 
 func enable(character: Node3D) -> void:

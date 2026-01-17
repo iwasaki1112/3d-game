@@ -186,3 +186,17 @@ func _update_circle_color() -> void:
 			_circle_material.albedo_color = start_color
 		else:
 			_circle_material.albedo_color = end_color
+
+
+## 色を変更
+## @param bg_color: 背景円の色
+## @param fg_color: アイコンの色
+func set_colors(bg_color: Color, fg_color: Color) -> void:
+	start_color = bg_color
+	end_color = bg_color  # 開始/終点とも同じ背景色に
+	icon_color = fg_color
+	if _circle_material:
+		_circle_material.albedo_color = bg_color
+	if _icon_material:
+		_icon_material.albedo_color = fg_color
+		_icon_material.emission = fg_color

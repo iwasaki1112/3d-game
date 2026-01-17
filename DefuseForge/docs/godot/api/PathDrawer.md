@@ -88,6 +88,18 @@ PathDrawerを無効化する。
 #### set_line_color(color: Color) -> void
 ライン色を変更する。
 
+#### set_character_color(color: Color) -> void
+キャラクター色を設定する。パス線・VisionMarker・RunMarkerに適用される。
+
+**引数:**
+- `color` - キャラクター固有色
+
+```gdscript
+# CharacterColorManagerと連携
+var char_color = CharacterColorManager.get_character_color(character)
+path_drawer.set_character_color(char_color)
+```
+
 #### get_drawing_mode() -> DrawingMode
 現在の描画モードを取得する。
 

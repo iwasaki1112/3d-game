@@ -114,6 +114,49 @@ func get_label_count() -> int:
 	return _labels.size()
 
 
+## キャラクターのラベル色を設定
+## @param character: 対象キャラクター
+## @param color: 背景色
+func set_label_color(character: Node, color: Color) -> void:
+	if not character:
+		return
+
+	var char_id = character.get_instance_id()
+	if not _labels.has(char_id):
+		return
+
+	var container = _labels[char_id]
+	if not is_instance_valid(container):
+		return
+
+	# 背景（●）の色を変更
+	var bg_label = container.get_node_or_null("Background")
+	if bg_label and bg_label is Label3D:
+		bg_label.modulate = Color(color.r, color.g, color.b, 0.9)
+
+
+## ラベルテキストを更新（CharacterColorManagerと連携用）
+## @param character: 対象キャラクター
+## @param label_char: 新しいラベル文字
+func set_label_text(character: Node, label_char: String) -> void:
+	if not character:
+		return
+
+	var char_id = character.get_instance_id()
+	if not _labels.has(char_id):
+		return
+
+	var container = _labels[char_id]
+	if not is_instance_valid(container):
+		return
+
+	# テキストラベルを更新
+	var text_label = container.get_node_or_null("Text")
+	if text_label and text_label is Label3D:
+		text_label.text = label_char
+		container.name = "CharacterLabel_%s" % label_char
+
+
 # ============================================
 # Internal Methods
 # ============================================
