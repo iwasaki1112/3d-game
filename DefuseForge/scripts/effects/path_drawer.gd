@@ -306,7 +306,12 @@ func _finish_vision_point(end_pos: Vector3) -> void:
 
 	if direction.length_squared() < 0.001:
 		print("[PathDrawer] Vision direction too short")
+		# 一時マーカーがあれば削除
+		_remove_temp_vision_marker()
 		return
+
+	# 一時マーカーを削除（新しいマーカーを正しい位置に挿入するため）
+	_remove_temp_vision_marker()
 
 	# 視線ポイントを追加（path_ratio順にソート）
 	var new_point = {
@@ -324,25 +329,38 @@ func _finish_vision_point(end_pos: Vector3) -> void:
 
 	_vision_points.insert(insert_index, new_point)
 
-	# 視線マーカーを作成
-	_create_vision_marker(_current_vision_anchor, direction)
+	# 視線マーカーを作成（同じ挿入位置に）
+	_create_vision_marker_at_index(_current_vision_anchor, direction, insert_index)
 
 	vision_point_added.emit(_current_vision_anchor, direction)
 	print("[PathDrawer] Vision point added at ratio %.2f" % _current_vision_ratio)
 
 
-## 視線マーカーを作成
+## 視線マーカーを作成（末尾に追加）
 func _create_vision_marker(anchor: Vector3, direction: Vector3) -> void:
+	_create_vision_marker_at_index(anchor, direction, _vision_meshes.size())
+
+
+## 視線マーカーを指定位置に作成
+func _create_vision_marker_at_index(anchor: Vector3, direction: Vector3, index: int) -> void:
 	var marker = MeshInstance3D.new()
 	marker.set_script(VisionMarkerScript)
 	add_child(marker)
-	_vision_meshes.append(marker)
+	_vision_meshes.insert(index, marker)
 
 	# マーカーの位置と方向を設定
 	marker.set_position_and_direction(anchor, direction)
 
 	# キャラクター色を適用
 	marker.set_colors(_character_color, Color.WHITE)
+
+
+## 一時的な視線マーカーを削除
+func _remove_temp_vision_marker() -> void:
+	# 一時マーカーは _vision_meshes.size() > _vision_points.size() の場合に存在
+	if _vision_meshes.size() > _vision_points.size():
+		var temp_marker = _vision_meshes.pop_back()
+		temp_marker.queue_free()
 
 
 ## 一時的な視線マーカーを更新（ドラッグ中）

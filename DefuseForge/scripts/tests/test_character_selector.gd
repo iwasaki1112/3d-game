@@ -486,6 +486,10 @@ func _spawn_character(preset_id: String) -> void:
 	if current_character and current_character.vision and fog_of_war_system:
 		fog_of_war_system.unregister_vision(current_character.vision)
 
+	# Unregister from EnemyVisibilitySystem before deletion
+	if current_character and enemy_visibility_system:
+		enemy_visibility_system.unregister_character(current_character)
+
 	# Remove current character label and release color
 	if current_character:
 		label_manager.remove_label(current_character)
@@ -522,9 +526,18 @@ func _setup_character_vision_for(character: Node) -> void:
 	# Setup vision component
 	var vision = character.setup_vision(90.0, 15.0)
 
-	# Wait for VisionComponent to initialize
+	# Wait for VisionComponent to initialize using call_deferred
+	# Note: Using call_deferred instead of await to avoid async function call issues
 	if vision:
-		await get_tree().process_frame
+		_complete_vision_setup.call_deferred(character)
+	else:
+		_complete_vision_setup(character)
+
+
+## 視界セットアップの完了処理（call_deferred用）
+func _complete_vision_setup(character: Node) -> void:
+	if not character or not is_instance_valid(character):
+		return
 
 	# Register with EnemyVisibilitySystem (handles FoW registration internally)
 	if enemy_visibility_system:
@@ -541,6 +554,7 @@ func _setup_character_vision_for(character: Node) -> void:
 		)
 
 	# Apply current vision state
+	var vision = character.vision
 	if not is_vision_enabled and vision:
 		vision.disable()
 		if fog_of_war_system:
@@ -578,6 +592,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	# 回転モード中のマウス/タッチ処理（UIで処理されなかった入力のみ）
 	if rotation_controller.is_rotation_active() and event is InputEventMouseButton and event.pressed:
 		rotation_controller.handle_input(event.position)
+		return
 
 	# パスモード中：パス描画後にキャラクター以外をクリックでキャンセル
 	if is_path_mode and event is InputEventMouseButton and event.pressed:
@@ -585,6 +600,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			var clicked_character = _raycast_character(event.position)
 			if not clicked_character:
 				_cancel_path_mode()
+		return
+
+	# マウス/タッチ処理（回転モード以外、パスモード以外）
+	# Note: _unhandled_input を使用することで、UIが入力を消費した後のみ処理される
+	if event is InputEventMouseButton and event.pressed:
+		if not rotation_controller.is_rotation_active() and not is_path_mode:
+			_handle_mouse_click(event)
 
 
 func _input(event: InputEvent) -> void:
@@ -596,10 +618,7 @@ func _input(event: InputEvent) -> void:
 		elif rotation_controller.is_rotation_active():
 			_on_rotate_cancel_pressed()
 
-	# マウス/タッチ処理（回転モード以外、パスモード以外）
-	if event is InputEventMouseButton and event.pressed:
-		if not rotation_controller.is_rotation_active() and not is_path_mode:
-			_handle_mouse_click(event)
+	# Note: マウスクリック処理は _unhandled_input に移動（UIが入力を消費できるようにするため）
 
 	var primary = selection_manager.primary_character
 	if not primary:
