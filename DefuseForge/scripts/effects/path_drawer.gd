@@ -58,6 +58,13 @@ var _run_segments: Array[Dictionary] = []  # { start_ratio, end_ratio }
 var _run_meshes: Array[MeshInstance3D] = []
 var _current_run_start: Dictionary = {}  # 未完成のrun開始点 { ratio, position }
 
+## キャラクター別マーカー管理（マルチセレクト対応）
+## { char_id: { "vision_points": Array[Dictionary], "vision_meshes": Array[MeshInstance3D],
+##              "run_segments": Array[Dictionary], "run_meshes": Array[MeshInstance3D] } }
+var _character_markers: Dictionary = {}
+var _active_edit_character: Node = null  # 現在編集中のキャラクター
+var _multi_character_mode: bool = false  # マルチキャラクターモード
+
 ## パス実行管理
 var _pending_path: PackedVector3Array = PackedVector3Array()
 var _pending_character: CharacterBody3D = null
@@ -196,7 +203,15 @@ func _handle_run_marker_input(event: InputEvent) -> void:
 
 				# Run区間を追加
 				var new_segment = { "start_ratio": start_ratio, "end_ratio": end_ratio }
-				_run_segments.append(new_segment)
+
+				# マルチキャラクターモードの場合、アクティブキャラクターのデータに追加
+				if _multi_character_mode and _active_edit_character:
+					var char_id = _active_edit_character.get_instance_id()
+					if _character_markers.has(char_id):
+						var char_data = _character_markers[char_id]
+						char_data.run_segments.append(new_segment)
+				else:
+					_run_segments.append(new_segment)
 
 				# 終点マーカーを作成
 				_create_run_marker(result.point, RunMarkerScript.MarkerType.END)
@@ -215,13 +230,22 @@ func _create_run_marker(pos: Vector3, type: int) -> void:
 	var marker = MeshInstance3D.new()
 	marker.set_script(RunMarkerScript)
 	add_child(marker)
-	_run_meshes.append(marker)
 
 	# マーカーの位置とタイプを設定
 	marker.set_position_and_type(pos, type)
 
 	# キャラクター色を適用
 	marker.set_colors(_character_color, Color.WHITE)
+
+	# マルチキャラクターモードの場合、アクティブキャラクターのメッシュ配列に追加
+	if _multi_character_mode and _active_edit_character:
+		var char_id = _active_edit_character.get_instance_id()
+		if _character_markers.has(char_id):
+			_character_markers[char_id].run_meshes.append(marker)
+			return
+
+	# シングルモードの場合
+	_run_meshes.append(marker)
 
 
 func _get_ground_position(screen_pos: Vector2) -> Variant:
@@ -320,7 +344,32 @@ func _finish_vision_point(end_pos: Vector3) -> void:
 		"direction": direction
 	}
 
-	# 挿入位置を見つける
+	# マルチキャラクターモードの場合、アクティブキャラクターのデータに追加
+	if _multi_character_mode and _active_edit_character:
+		var char_id = _active_edit_character.get_instance_id()
+		if _character_markers.has(char_id):
+			var char_data = _character_markers[char_id]
+			var vision_points: Array[Dictionary] = char_data.vision_points
+			var vision_meshes: Array[MeshInstance3D] = char_data.vision_meshes
+
+			# 挿入位置を見つける
+			var insert_index = 0
+			for i in range(vision_points.size()):
+				if vision_points[i].path_ratio > _current_vision_ratio:
+					break
+				insert_index = i + 1
+
+			vision_points.insert(insert_index, new_point)
+
+			# 視線マーカーを作成
+			var marker = _create_vision_marker_node(_current_vision_anchor, direction)
+			vision_meshes.insert(insert_index, marker)
+
+			vision_point_added.emit(_current_vision_anchor, direction)
+			print("[PathDrawer] Vision point added for %s at ratio %.2f" % [_active_edit_character.name, _current_vision_ratio])
+			return
+
+	# シングルモードの場合は従来通り
 	var insert_index = 0
 	for i in range(_vision_points.size()):
 		if _vision_points[i].path_ratio > _current_vision_ratio:
@@ -341,18 +390,25 @@ func _create_vision_marker(anchor: Vector3, direction: Vector3) -> void:
 	_create_vision_marker_at_index(anchor, direction, _vision_meshes.size())
 
 
-## 視線マーカーを指定位置に作成
-func _create_vision_marker_at_index(anchor: Vector3, direction: Vector3, index: int) -> void:
+## 視線マーカーノードを作成して返す（マルチキャラクター用）
+func _create_vision_marker_node(anchor: Vector3, direction: Vector3) -> MeshInstance3D:
 	var marker = MeshInstance3D.new()
 	marker.set_script(VisionMarkerScript)
 	add_child(marker)
-	_vision_meshes.insert(index, marker)
 
 	# マーカーの位置と方向を設定
 	marker.set_position_and_direction(anchor, direction)
 
 	# キャラクター色を適用
 	marker.set_colors(_character_color, Color.WHITE)
+
+	return marker
+
+
+## 視線マーカーを指定位置に作成
+func _create_vision_marker_at_index(anchor: Vector3, direction: Vector3, index: int) -> void:
+	var marker = _create_vision_marker_node(anchor, direction)
+	_vision_meshes.insert(index, marker)
 
 
 ## 一時的な視線マーカーを削除
@@ -442,6 +498,8 @@ func clear() -> void:
 	_drawing_mode = DrawingMode.MOVEMENT
 	_clear_vision_points()
 	_clear_run_markers()
+	# マルチキャラクターモードもクリア
+	_clear_multi_character_markers()
 
 
 func _clear_vision_points() -> void:
@@ -580,13 +638,29 @@ func get_vision_points() -> Array[Dictionary]:
 	return _vision_points
 
 
-## 視線ポイント数を取得
+## 視線ポイント数を取得（マルチモードの場合はアクティブキャラクターのカウント）
 func get_vision_point_count() -> int:
+	if _multi_character_mode and _active_edit_character:
+		return get_vision_point_count_for_character(_active_edit_character)
 	return _vision_points.size()
 
 
 ## 最後の視線ポイントを削除
 func remove_last_vision_point() -> void:
+	# マルチキャラクターモードの場合、アクティブキャラクターのデータから削除
+	if _multi_character_mode and _active_edit_character:
+		var char_id = _active_edit_character.get_instance_id()
+		if _character_markers.has(char_id):
+			var char_data = _character_markers[char_id]
+			if char_data.vision_points.size() > 0:
+				char_data.vision_points.pop_back()
+				if char_data.vision_meshes.size() > 0:
+					var mesh = char_data.vision_meshes.pop_back()
+					mesh.queue_free()
+				print("[PathDrawer] Last vision point removed for %s" % _active_edit_character.name)
+		return
+
+	# シングルモード
 	if _vision_points.size() > 0:
 		_vision_points.pop_back()
 		if _vision_meshes.size() > 0:
@@ -623,13 +697,41 @@ func get_run_segments() -> Array[Dictionary]:
 	return _run_segments
 
 
-## Run区間数を取得
+## Run区間数を取得（マルチモードの場合はアクティブキャラクターのカウント）
 func get_run_segment_count() -> int:
+	if _multi_character_mode and _active_edit_character:
+		return get_run_segment_count_for_character(_active_edit_character)
 	return _run_segments.size()
 
 
 ## 最後のRun区間を削除
 func remove_last_run_segment() -> void:
+	# マルチキャラクターモードの場合、アクティブキャラクターのデータから削除
+	if _multi_character_mode and _active_edit_character:
+		var char_id = _active_edit_character.get_instance_id()
+		if _character_markers.has(char_id):
+			var char_data = _character_markers[char_id]
+			if char_data.run_segments.size() > 0:
+				char_data.run_segments.pop_back()
+				# 終点マーカーを削除
+				if char_data.run_meshes.size() > 0:
+					var mesh = char_data.run_meshes.pop_back()
+					mesh.queue_free()
+				# 開始点マーカーも削除
+				if char_data.run_meshes.size() > 0:
+					var mesh = char_data.run_meshes.pop_back()
+					mesh.queue_free()
+				print("[PathDrawer] Last run segment removed for %s" % _active_edit_character.name)
+			elif not _current_run_start.is_empty():
+				# 未完成の開始点がある場合はそれを削除
+				_current_run_start = {}
+				if char_data.run_meshes.size() > 0:
+					var mesh = char_data.run_meshes.pop_back()
+					mesh.queue_free()
+				print("[PathDrawer] Incomplete run start point removed for %s" % _active_edit_character.name)
+		return
+
+	# シングルモード
 	if _run_segments.size() > 0:
 		_run_segments.pop_back()
 		# 終点マーカーを削除
@@ -728,3 +830,191 @@ func _on_path_completed() -> void:
 
 	clear()
 	print("[PathDrawer] Path execution completed")
+
+
+## ========================================
+## マルチキャラクターマーカー管理 API
+## ========================================
+
+## マルチキャラクターモードを開始
+## @param characters: 対象キャラクター配列
+func start_multi_character_mode(characters: Array[Node]) -> void:
+	_multi_character_mode = true
+	_character_markers.clear()
+
+	# 各キャラクター用のマーカーストレージを初期化
+	for character in characters:
+		var char_id = character.get_instance_id()
+		_character_markers[char_id] = {
+			"character": character,
+			"vision_points": [] as Array[Dictionary],
+			"vision_meshes": [] as Array[MeshInstance3D],
+			"run_segments": [] as Array[Dictionary],
+			"run_meshes": [] as Array[MeshInstance3D]
+		}
+
+	# 最初のキャラクターをアクティブに設定
+	if characters.size() > 0:
+		set_active_edit_character(characters[0])
+
+	print("[PathDrawer] Multi-character mode started with %d characters" % characters.size())
+
+
+## マルチキャラクターモードを終了
+func end_multi_character_mode() -> void:
+	_multi_character_mode = false
+	_active_edit_character = null
+	# マーカーデータはclear時にクリーンアップ
+	print("[PathDrawer] Multi-character mode ended")
+
+
+## 編集対象キャラクターを設定
+## @param character: 編集対象キャラクター
+func set_active_edit_character(character: Node) -> void:
+	if not _multi_character_mode:
+		_active_edit_character = character
+		return
+
+	if not character:
+		return
+
+	var char_id = character.get_instance_id()
+	if not _character_markers.has(char_id):
+		print("[PathDrawer] Character not in multi-character mode: %s" % character.name)
+		return
+
+	_active_edit_character = character
+
+	# キャラクター色を適用
+	var char_color = CharacterColorManager.get_character_color(character)
+	_character_color = char_color
+
+	print("[PathDrawer] Active edit character: %s" % character.name)
+
+
+## アクティブな編集キャラクターを取得
+func get_active_edit_character() -> Node:
+	return _active_edit_character
+
+
+## マルチキャラクターモードかどうか
+func is_multi_character_mode() -> bool:
+	return _multi_character_mode
+
+
+## キャラクター別の視線ポイント数を取得
+func get_vision_point_count_for_character(character: Node) -> int:
+	if not character:
+		return 0
+	var char_id = character.get_instance_id()
+	if _character_markers.has(char_id):
+		return _character_markers[char_id].vision_points.size()
+	return 0
+
+
+## キャラクター別のRun区間数を取得
+func get_run_segment_count_for_character(character: Node) -> int:
+	if not character:
+		return 0
+	var char_id = character.get_instance_id()
+	if _character_markers.has(char_id):
+		return _character_markers[char_id].run_segments.size()
+	return 0
+
+
+## キャラクター別の視線ポイントを取得
+func get_vision_points_for_character(character: Node) -> Array[Dictionary]:
+	if not character:
+		return []
+	var char_id = character.get_instance_id()
+	if _character_markers.has(char_id):
+		return _character_markers[char_id].vision_points
+	return []
+
+
+## キャラクター別のRun区間を取得
+func get_run_segments_for_character(character: Node) -> Array[Dictionary]:
+	if not character:
+		return []
+	var char_id = character.get_instance_id()
+	if _character_markers.has(char_id):
+		return _character_markers[char_id].run_segments
+	return []
+
+
+## 全キャラクターの視線ポイントを取得
+## @return { char_id: Array[Dictionary] }
+func get_all_vision_points() -> Dictionary:
+	if not _multi_character_mode:
+		# シングルモードの場合、現在のキャラクターIDで返す
+		if _active_edit_character:
+			return { _active_edit_character.get_instance_id(): _vision_points }
+		return {}
+
+	var result: Dictionary = {}
+	for char_id in _character_markers:
+		result[char_id] = _character_markers[char_id].vision_points
+	return result
+
+
+## 全キャラクターのRun区間を取得
+## @return { char_id: Array[Dictionary] }
+func get_all_run_segments() -> Dictionary:
+	if not _multi_character_mode:
+		if _active_edit_character:
+			return { _active_edit_character.get_instance_id(): _run_segments }
+		return {}
+
+	var result: Dictionary = {}
+	for char_id in _character_markers:
+		result[char_id] = _character_markers[char_id].run_segments
+	return result
+
+
+## マルチキャラクターモードで全マーカーをクリア
+func _clear_multi_character_markers() -> void:
+	for char_id in _character_markers:
+		var data = _character_markers[char_id]
+		for mesh in data.vision_meshes:
+			if is_instance_valid(mesh):
+				mesh.queue_free()
+		for mesh in data.run_meshes:
+			if is_instance_valid(mesh):
+				mesh.queue_free()
+	_character_markers.clear()
+	_active_edit_character = null
+	_multi_character_mode = false
+
+
+## 全キャラクターのVisionMarkersを移譲
+## @return { char_id: Array[MeshInstance3D] }
+func take_all_vision_markers() -> Dictionary:
+	if not _multi_character_mode:
+		if _active_edit_character:
+			var markers = _vision_meshes.duplicate()
+			_vision_meshes.clear()
+			return { _active_edit_character.get_instance_id(): markers }
+		return {}
+
+	var result: Dictionary = {}
+	for char_id in _character_markers:
+		result[char_id] = _character_markers[char_id].vision_meshes.duplicate()
+		_character_markers[char_id].vision_meshes.clear()
+	return result
+
+
+## 全キャラクターのRunMarkersを移譲
+## @return { char_id: Array[MeshInstance3D] }
+func take_all_run_markers() -> Dictionary:
+	if not _multi_character_mode:
+		if _active_edit_character:
+			var markers = _run_meshes.duplicate()
+			_run_meshes.clear()
+			return { _active_edit_character.get_instance_id(): markers }
+		return {}
+
+	var result: Dictionary = {}
+	for char_id in _character_markers:
+		result[char_id] = _character_markers[char_id].run_meshes.duplicate()
+		_character_markers[char_id].run_meshes.clear()
+	return result

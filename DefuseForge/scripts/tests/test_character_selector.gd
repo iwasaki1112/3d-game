@@ -12,6 +12,7 @@ const EnemyVisibilitySystemScript = preload("res://scripts/systems/enemy_visibil
 const ContextMenuScript = preload("res://scripts/ui/context_menu_component.gd")
 const PathDrawerScript = preload("res://scripts/effects/path_drawer.gd")
 const RotationCtrl = preload("res://scripts/characters/character_rotation_controller.gd")
+const MarkerEditPanelScript = preload("res://scripts/ui/marker_edit_panel.gd")
 
 @onready var camera: Camera3D = $Camera3D
 @onready var character_dropdown: OptionButton = $UI/CharacterDropdown
@@ -57,6 +58,9 @@ var is_vision_enabled: bool = false  ## 視界/FoWの有効化（デフォルト
 ## パスシステム
 var path_drawer: Node3D = null
 
+## マーカー編集パネル（マルチキャラクター対応）
+var marker_edit_panel: VBoxContainer = null  # MarkerEditPanel script attached
+
 ## コントローラー
 var rotation_controller: Node = null
 
@@ -74,6 +78,7 @@ func _ready() -> void:
 	_setup_path_mode_controller()
 	_setup_controllers()
 	_setup_control_buttons()
+	_setup_marker_edit_panel()
 	_setup_label_manager()
 	_populate_dropdown()
 	character_dropdown.item_selected.connect(_on_team_selected)
@@ -190,6 +195,35 @@ func _setup_control_buttons() -> void:
 	rotate_panel.visible = false
 
 
+func _setup_marker_edit_panel() -> void:
+	# MarkerEditPanelを動的に作成
+	marker_edit_panel = VBoxContainer.new()
+	marker_edit_panel.set_script(MarkerEditPanelScript)
+	marker_edit_panel.name = "MarkerEditPanel"
+	ui_layer.add_child(marker_edit_panel)
+
+	# 右側に配置
+	marker_edit_panel.anchor_left = 1.0
+	marker_edit_panel.anchor_right = 1.0
+	marker_edit_panel.anchor_top = 0.0
+	marker_edit_panel.anchor_bottom = 0.0
+	marker_edit_panel.offset_left = -240
+	marker_edit_panel.offset_right = -10
+	marker_edit_panel.offset_top = 10
+
+	# シグナル接続
+	marker_edit_panel.character_selected.connect(_on_marker_panel_character_selected)
+	marker_edit_panel.vision_add_requested.connect(_on_marker_panel_vision_add)
+	marker_edit_panel.vision_undo_requested.connect(_on_marker_panel_vision_undo)
+	marker_edit_panel.run_add_requested.connect(_on_marker_panel_run_add)
+	marker_edit_panel.run_undo_requested.connect(_on_marker_panel_run_undo)
+	marker_edit_panel.confirm_requested.connect(_on_marker_panel_confirm)
+	marker_edit_panel.cancel_requested.connect(_on_marker_panel_cancel)
+
+	# 初期状態は非表示
+	marker_edit_panel.visible = false
+
+
 func _on_manual_control_button_pressed() -> void:
 	is_debug_control_enabled = not is_debug_control_enabled
 	_update_manual_control_button()
@@ -264,6 +298,9 @@ func _on_undo_vision_button_pressed() -> void:
 
 func _on_vision_point_added(_anchor: Vector3, _direction: Vector3) -> void:
 	_update_vision_label()
+	# MarkerEditPanelも更新
+	if marker_edit_panel:
+		marker_edit_panel.on_vision_point_added()
 
 
 func _on_add_run_button_pressed() -> void:
@@ -280,6 +317,9 @@ func _on_undo_run_button_pressed() -> void:
 
 func _on_run_segment_added(_start_ratio: float, _end_ratio: float) -> void:
 	_update_run_label()
+	# MarkerEditPanelも更新
+	if marker_edit_panel:
+		marker_edit_panel.on_run_segment_added()
 
 
 func _update_vision_label() -> void:
@@ -296,10 +336,12 @@ func _update_run_label() -> void:
 
 
 func _update_path_panel_visibility() -> void:
+	# MarkerEditPanelを使用するため、旧path_panelは常に非表示
 	if path_panel:
-		path_panel.visible = path_mode_controller.is_path_mode() and path_drawer.has_pending_path()
-		_update_vision_label()
-		_update_run_label()
+		path_panel.visible = false
+	# ラベル更新のみ実行
+	_update_vision_label()
+	_update_run_label()
 
 
 ## ========================================
@@ -342,16 +384,24 @@ func _on_path_mode_started(character: Node) -> void:
 	else:
 		_update_mode_info("Path Mode: Draw path for %d characters (ESC to cancel)" % target_count)
 
+	# MarkerEditPanelは後でパス描画完了時に表示（_on_path_readyで）
+
 
 func _on_path_mode_ended() -> void:
 	if path_panel:
 		path_panel.visible = false
+	if marker_edit_panel:
+		marker_edit_panel.visible = false
+		marker_edit_panel.clear()
 	_update_mode_info("")
 
 
 func _on_path_mode_cancelled() -> void:
 	if path_panel:
 		path_panel.visible = false
+	if marker_edit_panel:
+		marker_edit_panel.visible = false
+		marker_edit_panel.clear()
 	_update_mode_info("")
 
 
@@ -360,6 +410,14 @@ func _on_path_ready() -> void:
 	if path_drawer.start_vision_mode():
 		_update_mode_info("Vision Mode: Click on path to set look direction")
 		_update_path_panel_visibility()
+
+		# マルチセレクトの場合はMarkerEditPanelを表示、それ以外は従来のPathPanelを表示
+		if path_drawer.is_multi_character_mode():
+			marker_edit_panel.visible = true
+			path_panel.visible = false
+		else:
+			marker_edit_panel.visible = true  # シングルでもMarkerEditPanelを使用
+			path_panel.visible = false
 
 
 ## ========================================
@@ -826,9 +884,25 @@ func _start_move_mode(_character: Node) -> void:
 		print("[ContextMenu] No primary character selected")
 		return
 
+	# 選択中のキャラクター配列を取得
+	var selected_chars: Array[Node] = []
+	for c in selection_manager.selected_characters:
+		selected_chars.append(c)
+
 	# プライマリキャラクターの色を取得
 	var char_color = CharacterColorManager.get_character_color(primary)
+
+	# パスモード開始（enable()→clear()でリセットされる）
 	path_mode_controller.start(primary, char_color)
+
+	# マルチセレクトの場合、clear()後にマルチモードを初期化
+	if selected_chars.size() > 1:
+		path_drawer.start_multi_character_mode(selected_chars)
+		marker_edit_panel.setup(selected_chars, path_drawer)
+	else:
+		# シングルセレクトの場合
+		path_drawer.set_active_edit_character(primary)
+		marker_edit_panel.setup(selected_chars, path_drawer)
 
 
 ## 回転モード開始
@@ -938,6 +1012,48 @@ func _update_aim_position() -> void:
 	var intersection = ground_plane.intersects_ray(ray_origin, ray_dir)
 	if intersection:
 		aim_position = intersection
+
+
+## ========================================
+## MarkerEditPanel コールバック
+## ========================================
+
+func _on_marker_panel_character_selected(character: Node) -> void:
+	# PathDrawerの色を更新
+	var char_color = CharacterColorManager.get_character_color(character)
+	path_drawer.set_character_color(char_color)
+
+
+func _on_marker_panel_vision_add(_character: Node) -> void:
+	if path_drawer.has_pending_path():
+		path_drawer.start_vision_mode()
+		_update_vision_label()
+		print("[MarkerPanel] Vision mode activated")
+
+
+func _on_marker_panel_vision_undo(_character: Node) -> void:
+	path_drawer.remove_last_vision_point()
+	_update_vision_label()
+
+
+func _on_marker_panel_run_add(_character: Node) -> void:
+	if path_drawer.has_pending_path():
+		path_drawer.start_run_mode()
+		_update_run_label()
+		print("[MarkerPanel] Run marker mode activated")
+
+
+func _on_marker_panel_run_undo(_character: Node) -> void:
+	path_drawer.remove_last_run_segment()
+	_update_run_label()
+
+
+func _on_marker_panel_confirm() -> void:
+	path_mode_controller.confirm()
+
+
+func _on_marker_panel_cancel() -> void:
+	path_mode_controller.cancel()
 
 
 ## ========================================

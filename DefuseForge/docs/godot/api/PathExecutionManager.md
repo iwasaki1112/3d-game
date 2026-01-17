@@ -13,6 +13,7 @@
 ## 機能
 
 - パス確定（複数キャラクターへの同一パス適用）
+- **マルチキャラクターモード対応**（各キャラクター個別のマーカー）
 - 接続線の自動生成（キャラクター位置 → パス開始点）
 - 視線ポイント・Run区間の比率自動調整
 - パスメッシュ・マーカーの管理
@@ -99,6 +100,27 @@ func process_controllers(delta: float) -> void
 func on_path_following_completed(character: Node) -> void
 ```
 
+### 内部メソッド（マーカー生成）
+
+```gdscript
+# path_ratioからパス上の絶対座標を計算
+func _calculate_position_on_path(path: Array[Vector3], ratio: float) -> Vector3
+
+# 調整済み視線ポイントから新しいVisionMarkerを生成
+func _create_vision_markers_for_path(
+    path: Array[Vector3],
+    adjusted_vision_points: Array[Dictionary],
+    character: Node
+) -> Array[MeshInstance3D]
+
+# 調整済みRun区間から新しいRunMarkerを生成
+func _create_run_markers_for_path(
+    path: Array[Vector3],
+    adjusted_run_segments: Array[Dictionary],
+    character: Node
+) -> Array[MeshInstance3D]
+```
+
 ## 使用例
 
 ```gdscript
@@ -153,6 +175,35 @@ func _physics_process(delta: float) -> void:
 比率調整:
 new_ratio = (connect_length + old_ratio * base_length) / new_length
 ```
+
+## マルチセレクト時のマーカー生成
+
+複数キャラクター選択時、各キャラクターに対して個別のVisionMarker/RunMarkerを生成:
+
+### マルチキャラクターモード（PathDrawerで個別設定）
+
+PathDrawerがマルチキャラクターモード（`is_multi_character_mode() == true`）の場合：
+
+1. `path_drawer.get_all_vision_points()` で各キャラクターの視線ポイントを取得
+2. `path_drawer.get_all_run_segments()` で各キャラクターのRun区間を取得
+3. 各キャラクターのフルパス（接続線込み）に対して比率調整
+4. キャラクター別のマーカーを生成・適用
+
+### 従来モード（共通マーカー）
+
+PathDrawerが通常モード（`is_multi_character_mode() == false`）の場合：
+
+1. PathDrawerから共通マーカーの所有権を取得
+2. 各キャラクターのフルパス（接続線込み）に対して:
+   - 調整済み比率から`_calculate_position_on_path()`で座標計算
+   - `_create_vision_markers_for_path()`でVisionMarker生成
+   - `_create_run_markers_for_path()`でRunMarker生成
+3. 元のマーカーを削除
+
+マーカーの色はキャラクター個別色に基づいて設定:
+- VisionMarker: 背景=暗い色（char_color * 0.3）、矢印=キャラクター色
+- RunMarker START: 背景=キャラクター色、アイコン=白
+- RunMarker END: 背景=暗い色（char_color * 0.8/0.5/0.3）、アイコン=白
 
 ## 関連クラス
 

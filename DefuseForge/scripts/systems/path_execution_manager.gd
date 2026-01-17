@@ -5,6 +5,8 @@ class_name PathExecutionManager
 
 const PathLineMeshScript = preload("res://scripts/effects/path_line_mesh.gd")
 const PathFollowingCtrl = preload("res://scripts/characters/path_following_controller.gd")
+const VisionMarkerScript = preload("res://scripts/effects/vision_marker.gd")
+const RunMarkerScript = preload("res://scripts/effects/run_marker.gd")
 
 ## パス確定時のシグナル
 signal path_confirmed(character_count: int)
@@ -32,6 +34,7 @@ func setup(mesh_parent: Node3D) -> void:
 
 
 ## パスを確定して保存（対象キャラクターに同じパスを適用）
+## マルチキャラクターモードの場合、各キャラクター固有のマーカーを適用
 func confirm_path(
 	target_characters: Array[Node],
 	path_drawer: Node,
@@ -50,20 +53,47 @@ func confirm_path(
 	for point in pending:
 		base_path.append(point)
 
-	var base_vision_points = path_drawer.get_vision_points().duplicate()
-	var base_run_segments = path_drawer.get_run_segments().duplicate()
+	# マルチキャラクターモードかどうかで処理を分岐
+	var is_multi_mode = path_drawer.is_multi_character_mode()
 
-	# 元のマーカーの所有権を取得
-	var original_vision_markers = path_drawer.take_vision_markers()
-	var original_run_markers = path_drawer.take_run_markers()
+	# マルチモードの場合、キャラクター別のマーカーを取得
+	var all_vision_points: Dictionary = {}
+	var all_run_segments: Dictionary = {}
+	var all_vision_markers: Dictionary = {}
+	var all_run_markers: Dictionary = {}
+
+	if is_multi_mode:
+		all_vision_points = path_drawer.get_all_vision_points()
+		all_run_segments = path_drawer.get_all_run_segments()
+		all_vision_markers = path_drawer.take_all_vision_markers()
+		all_run_markers = path_drawer.take_all_run_markers()
+	else:
+		# シングルモードの場合、従来通り
+		var base_vision = path_drawer.get_vision_points().duplicate()
+		var base_run = path_drawer.get_run_segments().duplicate()
+		var original_vision_markers = path_drawer.take_vision_markers()
+		var original_run_markers = path_drawer.take_run_markers()
+
+		# 全キャラクターに同じマーカーを適用するため、一時的に格納
+		for character in target_characters:
+			var cid = character.get_instance_id()
+			all_vision_points[cid] = base_vision.duplicate()
+			all_run_segments[cid] = base_run.duplicate()
+
+		# 元のマーカーは後で削除
+		for marker in original_vision_markers:
+			if is_instance_valid(marker):
+				marker.queue_free()
+		for marker in original_run_markers:
+			if is_instance_valid(marker):
+				marker.queue_free()
 
 	var path_start = base_path[0] if base_path.size() > 0 else Vector3.ZERO
 
 	# 元のパスの長さを計算
 	var base_length = _calculate_path_length(base_path)
 
-	# 対象キャラクターに同じパスを適用
-	var first_char_id: int = -1
+	# 対象キャラクターにパスを適用
 	var processed_count = 0
 
 	for character in target_characters:
@@ -83,41 +113,62 @@ func confirm_path(
 			connect_length = char_pos.distance_to(path_start)
 		full_path.append_array(base_path)
 
+		# キャラクター固有の視線ポイントとRun区間を取得
+		var char_vision_points: Array[Dictionary] = []
+		if all_vision_points.has(char_id):
+			for vp in all_vision_points[char_id]:
+				char_vision_points.append(vp)
+
+		var char_run_segments: Array[Dictionary] = []
+		if all_run_segments.has(char_id):
+			for seg in all_run_segments[char_id]:
+				char_run_segments.append(seg)
+
 		# 視線ポイントとRun区間の比率を再計算
-		var adjusted_vision_points = _adjust_ratios_for_connection(base_vision_points, connect_length, base_length)
-		var adjusted_run_segments = _adjust_run_ratios_for_connection(base_run_segments, connect_length, base_length)
+		var adjusted_vision_points = _adjust_ratios_for_connection(char_vision_points, connect_length, base_length)
+		var adjusted_run_segments = _adjust_run_ratios_for_connection(char_run_segments, connect_length, base_length)
 
 		# パスメッシュを作成（各キャラクターごと、キャラクター色適用）
 		var path_mesh = _create_path_mesh(full_path, character)
 
-		if first_char_id == -1:
-			# 最初のキャラクター：マーカーを保持
-			first_char_id = char_id
-			pending_paths[char_id] = {
-				"character": character,
-				"path": full_path,
-				"vision_points": adjusted_vision_points,
-				"run_segments": adjusted_run_segments,
-				"path_mesh": path_mesh,
-				"vision_markers": original_vision_markers,
-				"run_markers": original_run_markers
-			}
-		else:
-			# 2番目以降のキャラクター：マーカーなし
-			pending_paths[char_id] = {
-				"character": character,
-				"path": full_path,
-				"vision_points": adjusted_vision_points,
-				"run_segments": adjusted_run_segments,
-				"path_mesh": path_mesh,
-				"vision_markers": [],
-				"run_markers": []
-			}
+		# マルチモードの場合、元のマーカーを削除して新しいマーカーを生成
+		if is_multi_mode and all_vision_markers.has(char_id):
+			for marker in all_vision_markers[char_id]:
+				if is_instance_valid(marker):
+					marker.queue_free()
+		if is_multi_mode and all_run_markers.has(char_id):
+			for marker in all_run_markers[char_id]:
+				if is_instance_valid(marker):
+					marker.queue_free()
+
+		# 各キャラクター用にマーカーを新規生成
+		var char_vision_markers = _create_vision_markers_for_path(
+			full_path, adjusted_vision_points, character
+		)
+		var char_run_markers = _create_run_markers_for_path(
+			full_path, adjusted_run_segments, character
+		)
+
+		pending_paths[char_id] = {
+			"character": character,
+			"path": full_path,
+			"vision_points": adjusted_vision_points,
+			"run_segments": adjusted_run_segments,
+			"path_mesh": path_mesh,
+			"vision_markers": char_vision_markers,
+			"run_markers": char_run_markers
+		}
 
 		processed_count += 1
-		print("[PathExecution] Saved path for %s (%d points, connect: %.2f)" % [character.name, full_path.size(), connect_length])
+		print("[PathExecution] Saved path for %s (%d points, connect: %.2f, vision: %d, run: %d)" % [
+			character.name, full_path.size(), connect_length,
+			char_vision_markers.size(), char_run_markers.size()
+		])
 
-	print("[PathExecution] Applied same path to %d characters (formation)" % processed_count)
+	print("[PathExecution] Applied path to %d characters (%s mode)" % [
+		processed_count,
+		"multi-character" if is_multi_mode else "formation"
+	])
 	path_confirmed.emit(processed_count)
 	return true
 
@@ -382,3 +433,105 @@ func _create_path_mesh(path: Array[Vector3], character: Node = null) -> MeshInst
 	mesh.update_from_points(packed_path)
 
 	return mesh
+
+
+## path_ratioからパス上の絶対座標を計算
+func _calculate_position_on_path(path: Array[Vector3], ratio: float) -> Vector3:
+	if path.is_empty():
+		return Vector3.ZERO
+	if path.size() == 1:
+		return path[0]
+
+	# パス全体の長さを計算
+	var total_length = _calculate_path_length(path)
+	if total_length < 0.001:
+		return path[0]
+
+	# ratio位置までの累積距離
+	var target_distance = ratio * total_length
+	var accumulated: float = 0.0
+
+	for i in range(1, path.size()):
+		var segment_length = path[i - 1].distance_to(path[i])
+		if accumulated + segment_length >= target_distance:
+			# このセグメント内に目標位置がある
+			var segment_ratio = (target_distance - accumulated) / segment_length if segment_length > 0 else 0.0
+			return path[i - 1].lerp(path[i], segment_ratio)
+		accumulated += segment_length
+
+	# ratioが1.0を超える場合は終点を返す
+	return path[path.size() - 1]
+
+
+## 調整済み視線ポイントから新しいVisionMarkerを生成
+func _create_vision_markers_for_path(
+	path: Array[Vector3],
+	adjusted_vision_points: Array[Dictionary],
+	character: Node
+) -> Array[MeshInstance3D]:
+	var markers: Array[MeshInstance3D] = []
+
+	for vp in adjusted_vision_points:
+		var ratio: float = vp.path_ratio
+		var direction: Vector3 = vp.direction
+
+		# パス上の位置を計算
+		var anchor = _calculate_position_on_path(path, ratio)
+
+		# VisionMarkerを作成
+		var marker = MeshInstance3D.new()
+		marker.set_script(VisionMarkerScript)
+		_mesh_parent.add_child(marker)
+
+		# 位置と方向を設定
+		marker.set_position_and_direction(anchor, direction)
+
+		# キャラクター色を適用
+		var char_color = CharacterColorManager.get_character_color(character)
+		# 背景は暗い色、矢印はキャラクター色
+		var bg_color = Color(char_color.r * 0.3, char_color.g * 0.3, char_color.b * 0.3, 0.95)
+		marker.set_colors(bg_color, char_color)
+
+		markers.append(marker)
+
+	return markers
+
+
+## 調整済みRun区間から新しいRunMarkerを生成
+func _create_run_markers_for_path(
+	path: Array[Vector3],
+	adjusted_run_segments: Array[Dictionary],
+	character: Node
+) -> Array[MeshInstance3D]:
+	var markers: Array[MeshInstance3D] = []
+
+	for seg in adjusted_run_segments:
+		var start_ratio: float = seg.start_ratio
+		var end_ratio: float = seg.end_ratio
+
+		# パス上の位置を計算
+		var start_pos = _calculate_position_on_path(path, start_ratio)
+		var end_pos = _calculate_position_on_path(path, end_ratio)
+
+		# キャラクター色を取得
+		var char_color = CharacterColorManager.get_character_color(character)
+
+		# STARTマーカーを作成
+		var start_marker = MeshInstance3D.new()
+		start_marker.set_script(RunMarkerScript)
+		_mesh_parent.add_child(start_marker)
+		start_marker.set_position_and_type(start_pos, 0)  # 0 = MarkerType.START
+		start_marker.set_colors(char_color, Color.WHITE)
+		markers.append(start_marker)
+
+		# ENDマーカーを作成
+		var end_marker = MeshInstance3D.new()
+		end_marker.set_script(RunMarkerScript)
+		_mesh_parent.add_child(end_marker)
+		end_marker.set_position_and_type(end_pos, 1)  # 1 = MarkerType.END
+		# 終点は少し暗い色に
+		var end_bg_color = Color(char_color.r * 0.8, char_color.g * 0.5, char_color.b * 0.3, 0.95)
+		end_marker.set_colors(end_bg_color, Color.WHITE)
+		markers.append(end_marker)
+
+	return markers

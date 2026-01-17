@@ -256,31 +256,53 @@ func _update_vision_direction() -> void:
 
 
 ## パスの進行率を計算
+## キャラクターの実際の位置に基づいて、パス上の最も近い点を見つけて進行率を計算
 func _calculate_path_progress() -> float:
-	if _current_path.size() < 2:
+	if _current_path.size() < 2 or not _character:
 		return 0.0
+
+	var char_pos = _character.global_position
+	char_pos.y = 0
 
 	# パスの総距離を計算
 	var total_length = 0.0
 	for i in range(1, _current_path.size()):
 		total_length += _current_path[i - 1].distance_to(_current_path[i])
 
-	# 現在位置までの距離を計算
-	var current_length = 0.0
-	for i in range(1, _path_index + 1):
-		if i < _current_path.size():
-			current_length += _current_path[i - 1].distance_to(_current_path[i])
+	if total_length < 0.001:
+		return 0.0
 
-	# 現在のセグメント内の進行を追加
-	if _path_index < _current_path.size() and _character:
-		var prev_index = max(0, _path_index - 1)
-		var segment_start = _current_path[prev_index]
-		var char_pos = _character.global_position
-		char_pos.y = segment_start.y
-		if _path_index > 0:
-			current_length += segment_start.distance_to(char_pos)
+	# 各セグメントを調べて、キャラクターに最も近い点を見つける
+	var best_distance = INF
+	var best_accumulated_length = 0.0
+	var accumulated_length = 0.0
 
-	return current_length / total_length if total_length > 0 else 0.0
+	for i in range(1, _current_path.size()):
+		var p1 = _current_path[i - 1]
+		var p2 = _current_path[i]
+		p1.y = 0
+		p2.y = 0
+
+		var segment = p2 - p1
+		var segment_length = segment.length()
+		if segment_length < 0.001:
+			accumulated_length += segment_length
+			continue
+
+		# セグメント上の最近点を計算
+		var t = clampf((char_pos - p1).dot(segment) / (segment_length * segment_length), 0.0, 1.0)
+		var point_on_segment = p1 + segment * t
+		var distance = char_pos.distance_to(point_on_segment)
+
+		# 現在のセグメント以降のみ考慮（戻らない）
+		if i >= _path_index or i == _path_index:
+			if distance < best_distance:
+				best_distance = distance
+				best_accumulated_length = accumulated_length + segment_length * t
+
+		accumulated_length += segment_length
+
+	return best_accumulated_length / total_length
 
 
 ## Run区間内かどうかを判定
