@@ -114,7 +114,10 @@ func _apply_outline(character: Node) -> void:
 	if _outlined_meshes_by_character.has(char_id):
 		return
 
-	var meshes = _find_mesh_instances(character)
+	# CharacterModelだけを検索（武器を除外）
+	var model = character.get_node_or_null("CharacterModel")
+	var search_root = model if model else character
+	var meshes = _find_mesh_instances(search_root)
 	var outlined: Array[MeshInstance3D] = []
 
 	for mesh in meshes:
@@ -171,9 +174,14 @@ func clear_all_outlines() -> void:
 	_outlined_meshes_by_character.clear()
 
 
-## MeshInstance3Dを再帰的に探す
+## MeshInstance3Dを再帰的に探す（WeaponAttachmentは除外）
 func _find_mesh_instances(node: Node) -> Array[MeshInstance3D]:
 	var result: Array[MeshInstance3D] = []
+
+	# WeaponAttachment以下は武器なので除外
+	if node is BoneAttachment3D and node.name == "WeaponAttachment":
+		return result
+
 	if node is MeshInstance3D:
 		result.append(node)
 	for child in node.get_children():

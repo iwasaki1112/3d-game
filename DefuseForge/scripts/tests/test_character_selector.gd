@@ -677,6 +677,64 @@ func _complete_vision_setup(character: Node) -> void:
 		if fog_of_war_system:
 			fog_of_war_system.set_fog_visible(false)
 
+	# Set default weapon to pistol with aiming pose
+	var anim_ctrl = character.get_anim_controller()
+	if anim_ctrl:
+		anim_ctrl.set_weapon(AnimCtrl.Weapon.PISTOL)
+		anim_ctrl.set_aiming(true)
+
+	# Equip Glock
+	_equip_glock(character)
+
+
+## キャラクターにGlockを装備
+func _equip_glock(character: Node) -> void:
+	if not character:
+		return
+
+	var model = character.get_node_or_null("CharacterModel")
+	if not model:
+		return
+
+	var skeleton = _find_skeleton_in(model)
+	if not skeleton:
+		return
+
+	var bone_idx = skeleton.find_bone("mixamorig_RightHand")
+	if bone_idx < 0:
+		return
+
+	# Create BoneAttachment3D
+	var attachment = BoneAttachment3D.new()
+	attachment.name = "WeaponAttachment"
+	attachment.bone_name = "mixamorig_RightHand"
+	skeleton.add_child(attachment)
+
+	# Load Glock
+	var weapon_resource = load("res://assets/weapons/glock/glock.glb")
+	if not weapon_resource:
+		print("[Weapon] Failed to load Glock")
+		return
+
+	var weapon = weapon_resource.instantiate()
+	weapon.name = "Glock"
+	weapon.scale = Vector3.ONE * 18.0
+	weapon.rotation_degrees = Vector3(-79, -66, -28)
+	weapon.position = Vector3(1, 7, 2)
+	attachment.add_child(weapon)
+
+
+## モデル内のSkeleton3Dを検索
+func _find_skeleton_in(node: Node) -> Skeleton3D:
+	if node is Skeleton3D:
+		return node
+	for child in node.get_children():
+		var result = _find_skeleton_in(child)
+		if result:
+			return result
+	return null
+
+
 func _update_info_label(preset_id: String) -> void:
 	var preset = CharacterRegistry.get_preset(preset_id)
 	var player_team_name = PlayerState.get_team_name()
