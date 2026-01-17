@@ -47,6 +47,8 @@ var context_menu: Control = null  ## コンテキストメニュー
 ## マネージャー
 var selection_manager: CharacterSelectionManager = null
 var path_execution_manager: PathExecutionManager = null
+var idle_manager: IdleCharacterManager = null
+var path_mode_controller: PathModeController = null
 
 ## デバッグ操作モード
 var is_debug_control_enabled: bool = false  ## WASD/マウス操作の有効化（デフォルトOFF）
@@ -54,8 +56,6 @@ var is_vision_enabled: bool = false  ## 視界/FoWの有効化（デフォルト
 
 ## パスシステム
 var path_drawer: Node3D = null
-var is_path_mode: bool = false  ## パス描画モード中
-var path_editing_character: Node = null  ## 現在パスを編集中のキャラクター
 
 ## コントローラー
 var rotation_controller: Node = null
@@ -66,10 +66,12 @@ var label_manager: CharacterLabelManager = null
 func _ready() -> void:
 	_setup_selection_manager()
 	_setup_path_execution_manager()
+	_setup_idle_manager()
 	_setup_fog_of_war()
 	_setup_enemy_visibility_system()
 	_setup_context_menu()
 	_setup_path_drawer()
+	_setup_path_mode_controller()
 	_setup_controllers()
 	_setup_control_buttons()
 	_setup_label_manager()
@@ -101,6 +103,28 @@ func _setup_path_execution_manager() -> void:
 	path_execution_manager.paths_cleared.connect(_on_paths_cleared)
 
 
+func _setup_idle_manager() -> void:
+	idle_manager = IdleCharacterManager.new()
+	idle_manager.name = "IdleCharacterManager"
+	add_child(idle_manager)
+	idle_manager.setup(
+		characters,
+		func(c): return path_execution_manager.is_character_following_path(c),
+		func(): return selection_manager.primary_character
+	)
+
+
+func _setup_path_mode_controller() -> void:
+	path_mode_controller = PathModeController.new()
+	path_mode_controller.name = "PathModeController"
+	add_child(path_mode_controller)
+	path_mode_controller.setup(path_drawer, selection_manager, path_execution_manager)
+	path_mode_controller.mode_started.connect(_on_path_mode_started)
+	path_mode_controller.mode_ended.connect(_on_path_mode_ended)
+	path_mode_controller.mode_cancelled.connect(_on_path_mode_cancelled)
+	path_mode_controller.path_ready.connect(_on_path_ready)
+
+
 func _setup_controllers() -> void:
 	# CharacterRotationController
 	rotation_controller = Node.new()
@@ -126,8 +150,9 @@ func _setup_path_drawer() -> void:
 	path_drawer.name = "PathDrawer"
 	add_child(path_drawer)
 	path_drawer.setup(camera)
-	path_drawer.drawing_finished.connect(_on_path_drawing_finished)
 	path_drawer.mode_changed.connect(_on_path_mode_changed)
+	path_drawer.vision_point_added.connect(_on_vision_point_added)
+	path_drawer.run_segment_added.connect(_on_run_segment_added)
 
 
 func _setup_control_buttons() -> void:
@@ -150,12 +175,6 @@ func _setup_control_buttons() -> void:
 	# パス確定/キャンセルボタン
 	confirm_path_button.pressed.connect(_on_confirm_path_button_pressed)
 	cancel_button.pressed.connect(_on_cancel_button_pressed)
-
-	# 視線ポイント追加シグナル
-	path_drawer.vision_point_added.connect(_on_vision_point_added)
-
-	# Runセグメント追加シグナル
-	path_drawer.run_segment_added.connect(_on_run_segment_added)
 
 	# 実行ボタン（外出し）
 	execute_walk_button.pressed.connect(_on_execute_walk_button_pressed)
@@ -213,12 +232,12 @@ func _apply_vision_state() -> void:
 
 ## パス確定ボタン：現在のパスを保存
 func _on_confirm_path_button_pressed() -> void:
-	_confirm_current_path()
+	path_mode_controller.confirm()
 
 
 ## キャンセルボタン
 func _on_cancel_button_pressed() -> void:
-	_cancel_path_mode()
+	path_mode_controller.cancel()
 
 
 ## 全員実行ボタン
@@ -278,7 +297,7 @@ func _update_run_label() -> void:
 
 func _update_path_panel_visibility() -> void:
 	if path_panel:
-		path_panel.visible = is_path_mode and path_drawer.has_pending_path()
+		path_panel.visible = path_mode_controller.is_path_mode() and path_drawer.has_pending_path()
 		_update_vision_label()
 		_update_run_label()
 
@@ -310,6 +329,37 @@ func _on_all_paths_completed() -> void:
 
 func _on_paths_cleared() -> void:
 	_update_pending_paths_label()
+
+
+## ========================================
+## パスモードコントローラーコールバック
+## ========================================
+
+func _on_path_mode_started(character: Node) -> void:
+	var target_count = path_mode_controller.get_target_count()
+	if target_count == 1:
+		_update_mode_info("Path Mode: Draw path (ESC to cancel)")
+	else:
+		_update_mode_info("Path Mode: Draw path for %d characters (ESC to cancel)" % target_count)
+
+
+func _on_path_mode_ended() -> void:
+	if path_panel:
+		path_panel.visible = false
+	_update_mode_info("")
+
+
+func _on_path_mode_cancelled() -> void:
+	if path_panel:
+		path_panel.visible = false
+	_update_mode_info("")
+
+
+func _on_path_ready() -> void:
+	# 視線ポイントモードへ移行
+	if path_drawer.start_vision_mode():
+		_update_mode_info("Vision Mode: Click on path to set look direction")
+		_update_path_panel_visibility()
 
 
 ## ========================================
@@ -481,6 +531,11 @@ func _spawn_initial_characters() -> void:
 		if cts.size() >= 1:
 			_update_info_label(cts[0].id)
 
+	# IdleManagerにキャラクターリストを更新
+	if idle_manager:
+		idle_manager.set_characters(characters)
+
+
 func _spawn_character(preset_id: String) -> void:
 	# Unregister old vision from FoW
 	if current_character and current_character.vision and fog_of_war_system:
@@ -498,6 +553,8 @@ func _spawn_character(preset_id: String) -> void:
 	# Remove current character
 	if current_character:
 		characters.erase(current_character)
+		if idle_manager:
+			idle_manager.remove_character(current_character)
 		current_character.queue_free()
 		current_character = null
 
@@ -506,6 +563,8 @@ func _spawn_character(preset_id: String) -> void:
 	if current_character:
 		add_child(current_character)
 		characters.append(current_character)
+		if idle_manager:
+			idle_manager.add_character(current_character)
 		selection_manager.deselect_all()  # 生成時は未選択状態
 		_setup_character_vision()
 		_assign_character_color_and_label(current_character)
@@ -595,17 +654,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	# パスモード中：パス描画後にキャラクター以外をクリックでキャンセル
-	if is_path_mode and event is InputEventMouseButton and event.pressed:
+	if path_mode_controller.is_path_mode() and event is InputEventMouseButton and event.pressed:
 		if path_drawer.has_pending_path():
 			var clicked_character = _raycast_character(event.position)
-			if not clicked_character:
-				_cancel_path_mode()
+			path_mode_controller.handle_click_to_cancel(clicked_character)
 		return
 
 	# マウス/タッチ処理（回転モード以外、パスモード以外）
 	# Note: _unhandled_input を使用することで、UIが入力を消費した後のみ処理される
 	if event is InputEventMouseButton and event.pressed:
-		if not rotation_controller.is_rotation_active() and not is_path_mode:
+		if not rotation_controller.is_rotation_active() and not path_mode_controller.is_path_mode():
 			_handle_mouse_click(event)
 
 
@@ -763,32 +821,14 @@ func _on_context_menu_item_selected(action_id: String, character: CharacterBody3
 
 ## 移動モード開始（プライマリキャラクターを基準にパス描画）
 func _start_move_mode(_character: Node) -> void:
-	if not selection_manager.has_selection():
-		print("[ContextMenu] No characters selected")
+	var primary = selection_manager.primary_character
+	if not primary:
+		print("[ContextMenu] No primary character selected")
 		return
 
-	# MOVEモード開始時に対象キャラクターを確定（スナップショット）
-	selection_manager.capture_path_targets()
-
-	var primary = selection_manager.primary_character
-	var target_count = selection_manager.get_path_targets().size()
-
-	# プライマリキャラクターを基準にパス描画
-	print("[ContextMenu] Move mode for %d characters (primary: %s)" % [
-		target_count, primary.name
-	])
-	is_path_mode = true
-	path_editing_character = primary
-	path_drawer.enable(primary)
-
-	# プライマリキャラクターの色をPathDrawerに設定
+	# プライマリキャラクターの色を取得
 	var char_color = CharacterColorManager.get_character_color(primary)
-	path_drawer.set_character_color(char_color)
-
-	if target_count == 1:
-		_update_mode_info("Path Mode: Draw path (ESC to cancel)")
-	else:
-		_update_mode_info("Path Mode: Draw path for %d characters (ESC to cancel)" % target_count)
+	path_mode_controller.start(primary, char_color)
 
 
 ## 回転モード開始
@@ -811,7 +851,7 @@ func _physics_process(delta: float) -> void:
 	path_execution_manager.process_controllers(delta)
 
 	# パス追従していない全キャラクターのアイドル状態を維持
-	_update_idle_characters(delta)
+	idle_manager.process_idle_characters(delta)
 
 	# 回転モード中はコントローラーに処理を委譲
 	if rotation_controller.is_rotation_active():
@@ -838,34 +878,14 @@ func _physics_process(delta: float) -> void:
 		_update_aim_position()
 
 	# パスモード中は現在の向きを維持
-	if is_path_mode:
+	if path_mode_controller.is_path_mode():
 		var current_look_dir = anim_ctrl.get_look_direction()
 		anim_ctrl.update_animation(Vector3.ZERO, current_look_dir, false, delta)
 		return
 
-	# デバッグ操作が無効の場合は入力を無視（敵追跡は有効）
+	# デバッグ操作が無効の場合はIdleManagerに処理を委譲
 	if not is_debug_control_enabled:
-		# Combat awarenessを処理
-		if primary.combat_awareness and primary.combat_awareness.has_method("process"):
-			primary.combat_awareness.process(delta)
-
-		var look_dir: Vector3 = Vector3.ZERO
-
-		# 敵視認チェック（最優先）
-		if primary.combat_awareness and primary.combat_awareness.has_method("is_tracking_enemy"):
-			if primary.combat_awareness.is_tracking_enemy():
-				look_dir = primary.combat_awareness.get_override_look_direction()
-
-		# デフォルト: 現在の向きを維持
-		if look_dir.length_squared() < 0.1:
-			look_dir = anim_ctrl.get_look_direction()
-
-		anim_ctrl.update_animation(Vector3.ZERO, look_dir, false, delta)
-		primary.velocity.x = 0
-		primary.velocity.z = 0
-		if not primary.is_on_floor():
-			primary.velocity.y -= 9.8 * delta
-		primary.move_and_slide()
+		idle_manager.process_primary_idle(primary, delta)
 		return
 
 	# Get input
@@ -907,41 +927,6 @@ func _physics_process(delta: float) -> void:
 	primary.move_and_slide()
 
 
-## パス追従していないキャラクターのアイドル状態を更新
-func _update_idle_characters(delta: float) -> void:
-	var primary = selection_manager.primary_character
-
-	for character in characters:
-		# パス追従中はスキップ
-		if path_execution_manager.is_character_following_path(character):
-			continue
-		# プライマリキャラクターは後で別処理
-		if character == primary:
-			continue
-		# 死亡中はスキップ
-		if not character.is_alive:
-			continue
-
-		# Combat awarenessを処理（アイドル中も敵を追跡）
-		if character.combat_awareness and character.combat_awareness.has_method("process"):
-			character.combat_awareness.process(delta)
-
-		var anim_ctrl = character.get_anim_controller()
-		if anim_ctrl:
-			var look_dir: Vector3 = Vector3.ZERO
-
-			# 敵視認チェック（最優先）
-			if character.combat_awareness and character.combat_awareness.has_method("is_tracking_enemy"):
-				if character.combat_awareness.is_tracking_enemy():
-					look_dir = character.combat_awareness.get_override_look_direction()
-
-			# デフォルト: 現在の向きを維持
-			if look_dir.length_squared() < 0.1:
-				look_dir = anim_ctrl.get_look_direction()
-
-			anim_ctrl.update_animation(Vector3.ZERO, look_dir, false, delta)
-
-
 func _update_aim_position() -> void:
 	if not camera:
 		return
@@ -959,20 +944,6 @@ func _update_aim_position() -> void:
 ## パスシステム
 ## ========================================
 
-## パス描画完了時
-func _on_path_drawing_finished(points: PackedVector3Array) -> void:
-	if points.size() < 2:
-		_cancel_path_mode()
-		return
-
-	print("[PathSystem] Path drawn with %d points" % points.size())
-
-	# 視線ポイントモードへ移行
-	if path_drawer.start_vision_mode():
-		_update_mode_info("Vision Mode: Click on path to set look direction")
-		_update_path_panel_visibility()
-
-
 ## パスモード変更時
 func _on_path_mode_changed(mode: int) -> void:
 	if mode == 0:  # MOVEMENT
@@ -982,51 +953,6 @@ func _on_path_mode_changed(mode: int) -> void:
 		var count = path_drawer.get_vision_point_count()
 		_update_mode_info("Vision Mode: %d vision points" % count)
 		_update_path_panel_visibility()
-
-
-## 現在編集中のパスを確定して保存
-func _confirm_current_path() -> void:
-	if not path_drawer.has_pending_path():
-		_cancel_path_mode()
-		return
-
-	var targets = selection_manager.get_path_targets()
-	if targets.is_empty():
-		print("[PathSystem] No target characters for path")
-		_cancel_path_mode()
-		return
-
-	# PathExecutionManagerに委譲
-	var primary = selection_manager.primary_character
-	if path_execution_manager.confirm_path(targets, path_drawer, primary):
-		# パスモードを終了
-		is_path_mode = false
-		path_editing_character = null
-		selection_manager.clear_path_targets()
-		path_drawer.clear()
-		path_drawer.disable()
-
-		if path_panel:
-			path_panel.visible = false
-		_update_mode_info("")
-
-		# パス確定後は選択を解除
-		selection_manager.deselect_all()
-	else:
-		_cancel_path_mode()
-
-
-## パスモードをキャンセル
-func _cancel_path_mode() -> void:
-	is_path_mode = false
-	path_editing_character = null
-	selection_manager.clear_path_targets()
-	path_drawer.clear()
-	path_drawer.disable()
-	_update_mode_info("")
-	if path_panel:
-		path_panel.visible = false
-	print("[PathSystem] Path mode cancelled")
 
 
 ## 全キャラクターのパスを同時実行
