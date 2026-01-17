@@ -66,6 +66,7 @@ const STATIONARY_THRESHOLD: int = 3  # この回数連続で変化なしなら�
 # References
 # ============================================
 var _character: Node3D = null
+var _character_rid: RID  # RIDキャッシュ（毎フレーム取得を回避）
 
 # ============================================
 # Lifecycle
@@ -73,6 +74,9 @@ var _character: Node3D = null
 
 func _ready() -> void:
 	_character = get_parent()
+	# RIDをキャッシュ（毎レイキャストで取得を回避）
+	if _character is CollisionObject3D:
+		_character_rid = _character.get_rid()
 
 
 func _physics_process(delta: float) -> void:
@@ -178,8 +182,8 @@ func is_position_in_view(world_pos: Vector3) -> bool:
 		return false
 
 	var query := PhysicsRayQueryParameters3D.create(origin, world_pos, wall_collision_mask)
-	if _character is CollisionObject3D:
-		query.exclude = [_character.get_rid()]
+	if _character_rid.is_valid():
+		query.exclude = [_character_rid]
 
 	var result := space_state.intersect_ray(query)
 
@@ -281,8 +285,8 @@ func _calculate_shadow_cast_vision() -> void:
 		var end_point := origin + direction * view_distance
 
 		var query := PhysicsRayQueryParameters3D.create(origin, end_point, wall_collision_mask)
-		if _character is CollisionObject3D:
-			query.exclude = [_character.get_rid()]
+		if _character_rid.is_valid():
+			query.exclude = [_character_rid]
 
 		var result := space_state.intersect_ray(query)
 

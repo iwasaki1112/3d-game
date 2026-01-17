@@ -15,6 +15,7 @@ signal target_changed(new_target: Node, old_target: Node)
 # ============================================
 const SCAN_INTERVAL: float = 0.05  ## Scan every 50ms (matches EnemyVisibilitySystem)
 const TRACKING_TIMEOUT: float = 0.75  ## Time to track last known position after losing sight
+const CHARACTERS_CACHE_INTERVAL: float = 0.2  ## キャラクターキャッシュ更新間隔（200ms）
 
 # ============================================
 # State
@@ -26,6 +27,10 @@ var _time_since_lost: float = 0.0
 var _is_tracking_last_known: bool = false
 var _scan_timer: float = 0.0
 var _ignored_enemies: Array[Node] = []  ## Enemies dismissed by user action (e.g., rotation)
+
+# キャラクターキャッシュ（GC負荷削減）
+var _characters_cache: Array = []
+var _characters_cache_timer: float = CHARACTERS_CACHE_INTERVAL  # 初回即時更新
 
 
 # ============================================
@@ -102,6 +107,12 @@ func dismiss_current_target() -> void:
 func process(delta: float) -> void:
 	if not _character:
 		return
+
+	# キャラクターキャッシュ更新（200ms間隔）
+	_characters_cache_timer += delta
+	if _characters_cache_timer >= CHARACTERS_CACHE_INTERVAL:
+		_characters_cache_timer = 0.0
+		_characters_cache = get_tree().get_nodes_in_group("characters")
 
 	# Update tracking timeout
 	if _is_tracking_last_known:
@@ -227,10 +238,8 @@ func _handle_no_enemy_in_sight() -> void:
 func _get_enemy_characters() -> Array[Node]:
 	var enemies: Array[Node] = []
 
-	# Use characters group
-	var all_characters := get_tree().get_nodes_in_group("characters")
-
-	for character in all_characters:
+	# キャッシュを使用（GC負荷削減）
+	for character in _characters_cache:
 		if character == _character:
 			continue
 

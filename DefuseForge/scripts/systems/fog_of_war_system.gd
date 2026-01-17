@@ -20,7 +20,7 @@ const QUALITY_SETTINGS := {
 
 @export_group("Visual Settings")
 @export var fog_color: Color = Color(0.1, 0.15, 0.25, 0.85)
-@export var quality: Quality = Quality.HIGH  # 品質設定（モバイルはLOW推奨）
+@export var quality: Quality = Quality.LOW  # モバイル最適化: メモリ94%削減
 
 ## 内部（品質設定から自動設定）
 var texture_resolution: int = 2048

@@ -12,12 +12,9 @@ void fragment() {
 	float rim = 1.0 - abs(dot(NORMAL, VIEW));
 	rim = pow(rim, rim_power);
 
-	// Only show rim above threshold (outer edges)
-	if (rim < rim_threshold) {
-		discard;
-	}
-
+	// TBDR最適化: discard → ALPHA=0.0（モバイルGPU効率向上）
+	float visible = step(rim_threshold, rim);
 	ALBEDO = rim_color.rgb;
-	ALPHA = rim * rim_color.a;
-	EMISSION = rim_color.rgb * rim_intensity * rim;
+	ALPHA = rim * rim_color.a * visible;
+	EMISSION = rim_color.rgb * rim_intensity * rim * visible;
 }

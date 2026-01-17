@@ -16,6 +16,9 @@ signal vision_point_reached(index: int, direction: Vector3)
 @export var final_destination_radius: float = 0.5  ## 最終目的地への到達判定半径
 @export var ally_collision_radius: float = 1.0  ## 味方との衝突検出半径
 
+## キャッシュ設定
+const CHARACTERS_CACHE_INTERVAL: float = 0.15  ## キャラクターキャッシュ更新間隔（150ms）
+
 ## 内部状態
 var _character: CharacterBody3D = null
 var _is_following: bool = false
@@ -32,6 +35,10 @@ var _combat_awareness: Node = null  # CombatAwarenessComponent
 ## スタック検出用
 var _last_position: Vector3 = Vector3.ZERO
 var _stuck_time: float = 0.0
+
+## キャラクターキャッシュ（GC負荷削減）
+var _characters_cache: Array = []
+var _characters_cache_timer: float = CHARACTERS_CACHE_INTERVAL  # 初回即時更新
 
 
 ## セットアップ
@@ -116,6 +123,12 @@ func is_following_path() -> bool:
 func process(delta: float) -> void:
 	if not _is_following:
 		return
+
+	# キャラクターキャッシュ更新（150ms間隔）
+	_characters_cache_timer += delta
+	if _characters_cache_timer >= CHARACTERS_CACHE_INTERVAL:
+		_characters_cache_timer = 0.0
+		_characters_cache = get_tree().get_nodes_in_group("characters")
 
 	if not _character or _current_path.size() == 0:
 		_finish()
@@ -377,9 +390,8 @@ func _is_ally_at_destination() -> bool:
 	var final_destination = _current_path[_current_path.size() - 1]
 	final_destination.y = 0
 
-	var all_characters = get_tree().get_nodes_in_group("characters")
-
-	for character in all_characters:
+	# キャッシュを使用（GC負荷削減）
+	for character in _characters_cache:
 		if character == _character:
 			continue
 		if "is_alive" in character and not character.is_alive:
