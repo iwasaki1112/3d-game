@@ -47,10 +47,25 @@ const WEAPON_CONFIGS = {
 
 # Animation configs
 const ANIMATIONS = [
-	{"name": "Idle", "weapon": AnimCtrl.Weapon.RIFLE, "aiming": false},
-	{"name": "Rifle Aim", "weapon": AnimCtrl.Weapon.RIFLE, "aiming": true},
-	{"name": "Pistol Idle", "weapon": AnimCtrl.Weapon.PISTOL, "aiming": true},
+	# Rifle AIM + Movement
+	{"name": "[Rifle] Walk Forward", "weapon": AnimCtrl.Weapon.RIFLE, "aiming": true, "move": "forward", "run": false},
+	{"name": "[Rifle] Walk Backward", "weapon": AnimCtrl.Weapon.RIFLE, "aiming": true, "move": "backward", "run": false},
+	{"name": "[Rifle] Walk Left", "weapon": AnimCtrl.Weapon.RIFLE, "aiming": true, "move": "left", "run": false},
+	{"name": "[Rifle] Walk Right", "weapon": AnimCtrl.Weapon.RIFLE, "aiming": true, "move": "right", "run": false},
+	{"name": "[Rifle] Run Forward", "weapon": AnimCtrl.Weapon.RIFLE, "aiming": true, "move": "forward", "run": true},
+	{"name": "[Rifle] Aim Idle", "weapon": AnimCtrl.Weapon.RIFLE, "aiming": true, "move": "none", "run": false},
+	# Pistol AIM + Movement
+	{"name": "[Pistol] Walk Forward", "weapon": AnimCtrl.Weapon.PISTOL, "aiming": true, "move": "forward", "run": false},
+	{"name": "[Pistol] Walk Backward", "weapon": AnimCtrl.Weapon.PISTOL, "aiming": true, "move": "backward", "run": false},
+	{"name": "[Pistol] Walk Left", "weapon": AnimCtrl.Weapon.PISTOL, "aiming": true, "move": "left", "run": false},
+	{"name": "[Pistol] Walk Right", "weapon": AnimCtrl.Weapon.PISTOL, "aiming": true, "move": "right", "run": false},
+	{"name": "[Pistol] Run Forward", "weapon": AnimCtrl.Weapon.PISTOL, "aiming": true, "move": "forward", "run": true},
+	{"name": "[Pistol] Aim Idle", "weapon": AnimCtrl.Weapon.PISTOL, "aiming": true, "move": "none", "run": false},
 ]
+
+# Current animation state
+var _current_move: String = "none"
+var _current_run: bool = false
 
 
 func _ready() -> void:
@@ -106,8 +121,8 @@ func _ready() -> void:
 	# Load default weapon (Glock)
 	_load_weapon("Glock")
 
-	# Set default animation (Pistol Idle)
-	_set_animation(2)  # Index 2 = Pistol Idle
+	# Set default animation (Rifle Walk Forward)
+	_set_animation(0)
 
 
 func _load_weapon(weapon_name: String) -> void:
@@ -158,7 +173,11 @@ func _set_animation(index: int) -> void:
 	if anim_ctrl:
 		anim_ctrl.set_weapon(anim_config.weapon)
 		anim_ctrl.set_aiming(anim_config.aiming)
-		print("Animation set: ", anim_config.name)
+
+	# Store movement state
+	_current_move = anim_config.get("move", "none")
+	_current_run = anim_config.get("run", false)
+	print("Animation set: ", anim_config.name, " (move: ", _current_move, ", run: ", _current_run, ")")
 
 
 func _create_ui() -> void:
@@ -187,7 +206,7 @@ func _create_ui() -> void:
 	_animation_dropdown = OptionButton.new()
 	for i in range(ANIMATIONS.size()):
 		_animation_dropdown.add_item(ANIMATIONS[i].name, i)
-	_animation_dropdown.selected = 2  # Pistol Idle
+	_animation_dropdown.selected = 0  # Rifle Walk Forward
 	_animation_dropdown.item_selected.connect(_on_animation_selected)
 	vbox.add_child(_animation_dropdown)
 
@@ -371,6 +390,20 @@ func _physics_process(delta: float) -> void:
 
 	var anim_ctrl = _character.get_anim_controller()
 	if anim_ctrl:
-		# Keep current facing direction, no movement
+		# Get look direction (character faces camera)
 		var look_dir = anim_ctrl.get_look_direction()
-		anim_ctrl.update_animation(Vector3.ZERO, look_dir, false, delta)
+
+		# Calculate movement direction based on current animation
+		# Note: Forward/Backward are negated due to +Z/-Z convention mismatch in CharacterAnimationController
+		var move_dir := Vector3.ZERO
+		match _current_move:
+			"forward":
+				move_dir = -look_dir
+			"backward":
+				move_dir = look_dir
+			"left":
+				move_dir = Vector3(-look_dir.z, 0, look_dir.x)
+			"right":
+				move_dir = Vector3(look_dir.z, 0, -look_dir.x)
+
+		anim_ctrl.update_animation(move_dir, look_dir, _current_run, delta)
