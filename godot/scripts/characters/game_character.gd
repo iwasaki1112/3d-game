@@ -229,6 +229,7 @@ func _attach_weapon_model(weapon: Resource) -> void:
 		_weapon_model = null
 
 	if not weapon or not weapon.model_scene:
+		print("GameCharacter: No model_scene for weapon")
 		return
 
 	var attachment = _ensure_weapon_attachment()
@@ -239,11 +240,23 @@ func _attach_weapon_model(weapon: Resource) -> void:
 	_weapon_model.name = "WeaponModel"
 	attachment.add_child(_weapon_model)
 
-	# Apply offset from WeaponPreset (if available)
-	if "attach_offset" in weapon:
+	# Mixamo skeleton is 0.01 scale, so weapon needs 100x scale
+	_weapon_model.scale = Vector3.ONE * 100.0
+
+	# Apply offset from WeaponPreset (use defaults for Mixamo if not set)
+	if weapon.attach_offset != Vector3.ZERO:
 		_weapon_model.position = weapon.attach_offset
-	if "attach_rotation" in weapon:
+	else:
+		# Default offset for Mixamo right hand
+		_weapon_model.position = Vector3(1, 7, 2)
+
+	if weapon.attach_rotation != Vector3.ZERO:
 		_weapon_model.rotation_degrees = weapon.attach_rotation
+	else:
+		# Default rotation for Mixamo right hand
+		_weapon_model.rotation_degrees = Vector3(-79, -66, -28)
+
+	print("GameCharacter: Attached weapon model: ", weapon.display_name)
 
 
 ## Equip a weapon from WeaponPreset

@@ -92,6 +92,7 @@ func setup(model: Node3D, anim_player: AnimationPlayer) -> void:
 
 	_setup_animation_tree()
 	call_deferred("_setup_upper_body_filter")
+	_update_weapon_idle_blend()
 
 	# 初期のエイム方向をモデルの前方向に設定
 	if _model:
@@ -143,6 +144,16 @@ func get_stance() -> Stance:
 ## Set weapon type
 func set_weapon(weapon: Weapon) -> void:
 	_weapon = weapon
+	_update_weapon_idle_blend()
+
+## Update weapon-based idle blend (rifle uses aiming pose, pistol uses normal idle)
+func _update_weapon_idle_blend() -> void:
+	if not _anim_tree:
+		return
+	# 0 = rifle idle (aiming pose), 1 = normal idle
+	var blend_value := 1.0 if _weapon != Weapon.RIFLE else 0.0
+	_anim_tree.set("parameters/WeaponIdleStandBlend/blend_amount", blend_value)
+	_anim_tree.set("parameters/WeaponIdleCrouchBlend/blend_amount", blend_value)
 
 ## Set aiming state (upper body layer)
 func set_aiming(aiming: bool) -> void:
@@ -323,6 +334,10 @@ func _setup_animation_tree() -> void:
 	var idle_anim := AnimationNodeAnimation.new()
 	idle_anim.animation = "idle"
 
+	# Rifle idle (standing) - uses aiming pose
+	var rifle_idle_anim := AnimationNodeAnimation.new()
+	rifle_idle_anim.animation = "idle_aiming"
+
 	# Crouching animations
 	var crouch_walk_blend_space := _create_blend_space({
 		Vector2(0, -1): "walk_crouching_forward",
@@ -337,6 +352,10 @@ func _setup_animation_tree() -> void:
 
 	var crouch_idle_anim := AnimationNodeAnimation.new()
 	crouch_idle_anim.animation = "idle_crouching"
+
+	# Rifle idle (crouching) - uses crouching aiming pose
+	var rifle_crouch_idle_anim := AnimationNodeAnimation.new()
+	rifle_crouch_idle_anim.animation = "idle_crouching_aiming"
 
 	# Aiming animations - Rifle
 	var aim_rifle_stand := AnimationNodeAnimation.new()
@@ -363,6 +382,10 @@ func _setup_animation_tree() -> void:
 	var crouch_idle_move_blend := AnimationNodeBlend2.new()
 	var stand_crouch_blend := AnimationNodeBlend2.new()
 
+	# Weapon idle blend nodes (switches idle based on weapon type)
+	var weapon_idle_stand_blend := AnimationNodeBlend2.new()
+	var weapon_idle_crouch_blend := AnimationNodeBlend2.new()
+
 	# Weapon blend nodes
 	var weapon_stand_blend := AnimationNodeBlend2.new()
 	var weapon_crouch_blend := AnimationNodeBlend2.new()
@@ -373,7 +396,9 @@ func _setup_animation_tree() -> void:
 	_aim_upper_blend.filter_enabled = true
 
 	# Add nodes
-	blend_tree.add_node("Idle", idle_anim, Vector2(-400, -100))
+	blend_tree.add_node("Idle", idle_anim, Vector2(-600, -200))
+	blend_tree.add_node("RifleIdle", rifle_idle_anim, Vector2(-600, -50))
+	blend_tree.add_node("WeaponIdleStandBlend", weapon_idle_stand_blend, Vector2(-400, -100))
 	blend_tree.add_node("WalkBlend", walk_blend_space, Vector2(-600, 100))
 	blend_tree.add_node("RunBlend", run_blend_space, Vector2(-600, 300))
 	blend_tree.add_node("WalkSpeed", walk_speed_node, Vector2(-400, 100))
@@ -381,7 +406,9 @@ func _setup_animation_tree() -> void:
 	blend_tree.add_node("WalkRunBlend", walk_run_blend, Vector2(-200, 200))
 	blend_tree.add_node("StandingBlend", standing_idle_move_blend, Vector2(0, 0))
 
-	blend_tree.add_node("CrouchIdle", crouch_idle_anim, Vector2(-400, 500))
+	blend_tree.add_node("CrouchIdle", crouch_idle_anim, Vector2(-600, 450))
+	blend_tree.add_node("RifleCrouchIdle", rifle_crouch_idle_anim, Vector2(-600, 550))
+	blend_tree.add_node("WeaponIdleCrouchBlend", weapon_idle_crouch_blend, Vector2(-400, 500))
 	blend_tree.add_node("CrouchWalkBlend", crouch_walk_blend_space, Vector2(-600, 700))
 	blend_tree.add_node("CrouchSpeed", crouch_speed_node, Vector2(-400, 700))
 	blend_tree.add_node("CrouchingBlend", crouch_idle_move_blend, Vector2(0, 600))
@@ -400,15 +427,21 @@ func _setup_animation_tree() -> void:
 	blend_tree.add_node("AimUpperBlend", _aim_upper_blend, Vector2(500, 400))
 
 	# Connect nodes
+	# Weapon-based idle blend (0 = rifle idle, 1 = normal idle; controlled by weapon type)
+	blend_tree.connect_node("WeaponIdleStandBlend", 0, "RifleIdle")
+	blend_tree.connect_node("WeaponIdleStandBlend", 1, "Idle")
+	blend_tree.connect_node("WeaponIdleCrouchBlend", 0, "RifleCrouchIdle")
+	blend_tree.connect_node("WeaponIdleCrouchBlend", 1, "CrouchIdle")
+
 	blend_tree.connect_node("WalkSpeed", 0, "WalkBlend")
 	blend_tree.connect_node("RunSpeed", 0, "RunBlend")
 	blend_tree.connect_node("WalkRunBlend", 0, "WalkSpeed")
 	blend_tree.connect_node("WalkRunBlend", 1, "RunSpeed")
-	blend_tree.connect_node("StandingBlend", 0, "Idle")
+	blend_tree.connect_node("StandingBlend", 0, "WeaponIdleStandBlend")
 	blend_tree.connect_node("StandingBlend", 1, "WalkRunBlend")
 
 	blend_tree.connect_node("CrouchSpeed", 0, "CrouchWalkBlend")
-	blend_tree.connect_node("CrouchingBlend", 0, "CrouchIdle")
+	blend_tree.connect_node("CrouchingBlend", 0, "WeaponIdleCrouchBlend")
 	blend_tree.connect_node("CrouchingBlend", 1, "CrouchSpeed")
 
 	blend_tree.connect_node("StandCrouchBlend", 0, "StandingBlend")

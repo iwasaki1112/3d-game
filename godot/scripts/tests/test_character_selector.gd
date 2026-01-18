@@ -16,6 +16,7 @@ const MarkerEditPanelScript = preload("res://scripts/ui/marker_edit_panel.gd")
 
 @onready var camera: Camera3D = $Camera3D
 @onready var character_dropdown: OptionButton = $UI/CharacterDropdown
+@onready var weapon_dropdown: OptionButton = $UI/WeaponDropdown
 @onready var info_label: Label = $UI/InfoLabel
 @onready var ui_layer: CanvasLayer = $UI
 @onready var manual_control_button: Button = $UI/ControlPanel/ManualControlButton
@@ -81,7 +82,9 @@ func _ready() -> void:
 	_setup_marker_edit_panel()
 	_setup_label_manager()
 	_populate_dropdown()
+	_populate_weapon_dropdown()
 	character_dropdown.item_selected.connect(_on_team_selected)
+	weapon_dropdown.item_selected.connect(_on_weapon_selected)
 
 	# Spawn 2 CT characters at different positions
 	_spawn_initial_characters()
@@ -523,6 +526,36 @@ func _populate_dropdown() -> void:
 	character_dropdown.set_item_metadata(1, GameCharacter.Team.TERRORIST)
 	character_dropdown.select(0)
 
+## 武器ドロップダウンを初期化
+func _populate_weapon_dropdown() -> void:
+	weapon_dropdown.clear()
+	var all_weapons = WeaponRegistry.get_all()
+	for i in range(all_weapons.size()):
+		var weapon = all_weapons[i]
+		weapon_dropdown.add_item(weapon.display_name)
+		weapon_dropdown.set_item_metadata(i, weapon.id)
+	# デフォルトはGlock
+	for i in range(all_weapons.size()):
+		if all_weapons[i].id == "glock":
+			weapon_dropdown.select(i)
+			break
+
+
+## 武器選択時
+func _on_weapon_selected(index: int) -> void:
+	var weapon_id: String = weapon_dropdown.get_item_metadata(index)
+	var weapon = WeaponRegistry.get_preset(weapon_id)
+	if not weapon:
+		print("[Weapon] Preset not found: %s" % weapon_id)
+		return
+
+	# 全キャラクターに武器を装備
+	for character in characters:
+		_equip_weapon_to_character(character, weapon)
+
+	print("[Weapon] Equipped %s to all characters" % weapon.display_name)
+
+
 ## チーム選択時
 func _on_team_selected(index: int) -> void:
 	var new_team: GameCharacter.Team = character_dropdown.get_item_metadata(index)
@@ -685,15 +718,23 @@ func _complete_vision_setup(character: Node) -> void:
 		anim_ctrl.set_weapon(AnimCtrl.Weapon.PISTOL)
 		anim_ctrl.set_aiming(true)
 
-	# Equip Glock
-	_equip_glock(character)
+	# Equip default weapon (Glock)
+	var default_weapon = WeaponRegistry.get_preset("glock")
+	if default_weapon:
+		_equip_weapon_to_character(character, default_weapon)
 
 
-## キャラクターにGlockを装備
-func _equip_glock(character: Node) -> void:
-	if not character:
+## キャラクターに武器を装備（汎用）
+func _equip_weapon_to_character(character: Node, weapon_preset: Resource) -> void:
+	if not character or not weapon_preset:
 		return
 
+	# GameCharacter.equip_weapon()を使用
+	if character.has_method("equip_weapon"):
+		character.equip_weapon(weapon_preset)
+		return
+
+	# フォールバック: 手動で装備
 	var model = character.get_node_or_null("CharacterModel")
 	if not model:
 		return
@@ -706,24 +747,45 @@ func _equip_glock(character: Node) -> void:
 	if bone_idx < 0:
 		return
 
+	# 既存のWeaponAttachmentを削除
+	var old_attachment = skeleton.get_node_or_null("WeaponAttachment")
+	if old_attachment:
+		old_attachment.queue_free()
+		await get_tree().process_frame
+
 	# Create BoneAttachment3D
 	var attachment = BoneAttachment3D.new()
 	attachment.name = "WeaponAttachment"
 	attachment.bone_name = "mixamorig_RightHand"
 	skeleton.add_child(attachment)
 
-	# Load Glock
-	var weapon_resource = load("res://assets/weapons/glock/glock.glb")
-	if not weapon_resource:
-		print("[Weapon] Failed to load Glock")
+	# Load weapon model
+	if not weapon_preset.model_scene:
+		print("[Weapon] No model_scene for %s" % weapon_preset.id)
 		return
 
-	var weapon = weapon_resource.instantiate()
-	weapon.name = "Glock"
-	weapon.scale = Vector3.ONE * 100.0  # Skeleton compensation (Mixamo is 0.01)
-	weapon.rotation_degrees = Vector3(-79, -66, -28)
-	weapon.position = Vector3(1, 7, 2)
-	attachment.add_child(weapon)
+	var weapon_model = weapon_preset.model_scene.instantiate()
+	weapon_model.name = weapon_preset.id.to_pascal_case()
+	weapon_model.scale = Vector3.ONE * 100.0  # Skeleton compensation (Mixamo is 0.01)
+
+	# Apply offset from preset or use defaults
+	if weapon_preset.get("attach_rotation"):
+		weapon_model.rotation_degrees = weapon_preset.attach_rotation
+	else:
+		weapon_model.rotation_degrees = Vector3(-79, -66, -28)
+
+	if weapon_preset.get("attach_offset"):
+		weapon_model.position = weapon_preset.attach_offset
+	else:
+		weapon_model.position = Vector3(1, 7, 2)
+
+	attachment.add_child(weapon_model)
+
+	# Update animation controller weapon type
+	var anim_ctrl = character.get_anim_controller()
+	if anim_ctrl:
+		var weapon_type = AnimCtrl.Weapon.PISTOL if weapon_preset.category == 2 else AnimCtrl.Weapon.RIFLE
+		anim_ctrl.set_weapon(weapon_type)
 
 
 ## モデル内のSkeleton3Dを検索
